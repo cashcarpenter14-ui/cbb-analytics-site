@@ -26,7 +26,7 @@ boxscores["game_id"] = boxscores["game_id"].astype(str).str.strip()
 boxscores["points"] = pd.to_numeric(boxscores["points"], errors="coerce")
 boxscores["possessions"] = pd.to_numeric(boxscores["possessions"], errors="coerce")
 
-# BUILD OPPONENT TABLE WITH ONLY NEEDED COLUMNS
+# BUILD OPPONENT TABLE
 opp = boxscores[["game_id", "team", "points", "possessions"]].copy()
 opp = opp.rename(columns={
     "team": "opponent",
@@ -35,16 +35,10 @@ opp = opp.rename(columns={
 })
 
 # BUILD MATCHUPS
-opp = boxscores[["game_id", "team", "points", "possessions"]].copy()
-opp = opp.rename(columns={
-    "team": "opponent",
-    "points": "opp_points",
-    "possessions": "opp_possessions"
-})
-
 game_matchups = boxscores.merge(opp, on="game_id", how="inner")
 game_matchups = game_matchups[game_matchups["team"] != game_matchups["opponent"]].copy()
 
+# EFFICIENCIES
 game_matchups["off_eff"] = np.where(
     game_matchups["possessions"] > 0,
     game_matchups["points"] / game_matchups["possessions"] * 100,
@@ -64,7 +58,7 @@ team_stats = game_matchups.groupby("team", as_index=False).agg({
     "possessions": "mean"
 })
 
-team_stats.columns = ["Team", "off_eff", "def_eff", "possessions"]
+team_stats = team_stats.rename(columns={"team": "Team"})
 
 # CLEAN ELO FILE
 elo_team_col = None
@@ -85,6 +79,14 @@ elo.columns = ["Team", "Elo"]
 elo["Team"] = elo["Team"].astype(str).str.strip()
 elo["Elo"] = pd.to_numeric(elo["Elo"], errors="coerce")
 
+# INCLUDE ALL TEAMS FROM ELO
+all_teams = pd.DataFrame({"Team": elo["Team"].dropna().unique()})
+team_stats = all_teams.merge(team_stats, on="Team", how="left")
+
+team_stats["off_eff"] = team_stats["off_eff"].fillna(100.0)
+team_stats["def_eff"] = team_stats["def_eff"].fillna(100.0)
+team_stats["possessions"] = team_stats["possessions"].fillna(67.0)
+
 # MERGE ELO
 team_stats = team_stats.merge(elo, on="Team", how="left")
 team_stats["Elo"] = team_stats["Elo"].fillna(1500)
@@ -99,41 +101,6 @@ team_rankings.to_csv(DATA_DIR / "team_rankings.csv", index=False)
 metadata = {
     "teams": int(len(team_stats))
 }
-team_stats.columns = ["Team", "off_eff", "def_eff", "possessions"]
-# Ensure every team from Elo appears, even if missing from boxscore aggregation
-elo_team_col = None
-elo_rating_col = None
-
-for c in elo.columns:
-    cl = c.lower()
-    if cl in ["team", "school"]:
-        elo_team_col = c
-    if cl in ["rating", "elo"]:
-        elo_rating_col = c
-
-if elo_team_col is None or elo_rating_col is None:
-    raise ValueError("elo_ratings_d1.csv must contain team and rating/elo columns")
-
-elo = elo[[elo_team_col, elo_rating_col]].copy()
-elo.columns = ["Team", "Elo"]
-elo["Team"] = elo["Team"].astype(str).str.strip()
-elo["Elo"] = pd.to_numeric(elo["Elo"], errors="coerce")
-
-all_teams = pd.DataFrame({"Team": elo["Team"].dropna().unique()})
-team_stats = all_teams.merge(team_stats, on="Team", how="left")
-
-team_stats["off_eff"] = team_stats["off_eff"].fillna(100.0)
-team_stats["def_eff"] = team_stats["def_eff"].fillna(100.0)
-team_stats["possessions"] = team_stats["possessions"].fillna(67.0)
-# ENSURE ALL TEAMS FROM ELO ARE INCLUDED
-all_teams = pd.DataFrame({"Team": elo.iloc[:, 0].astype(str).str.strip()})
-team_stats = team_stats.merge(elo, on="Team", how="left")
-team_stats["Elo"] = team_stats["Elo"].fillna(1500)
-
-# Fill missing stats with reasonable defaults
-team_stats["off_eff"] = team_stats["off_eff"].fillna(100)
-team_stats["def_eff"] = team_stats["def_eff"].fillna(100)
-team_stats["possessions"] = team_stats["possessions"].fillna(67)
 
 with open(DATA_DIR / "model_metadata.json", "w") as f:
     json.dump(metadata, f, indent=2)
