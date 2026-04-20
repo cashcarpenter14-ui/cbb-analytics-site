@@ -6,7 +6,11 @@ import streamlit as st
 
 from model import simulate_matchup
 
-st.set_page_config(page_title="College Basketball Analytics Beta", layout="wide")
+st.set_page_config(
+    page_title="Frontera Metrics",
+    page_icon="FMLogo.svg",
+    layout="wide"
+)
 
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
@@ -31,7 +35,14 @@ team_stats_df = load_csv(team_stats_path) if team_stats_path.exists() else pd.Da
 team_rankings_df = load_csv(team_rankings_path) if team_rankings_path.exists() else pd.DataFrame()
 metadata = load_json(metadata_path) if metadata_path.exists() else {}
 
-st.title("🏀 College Basketball Analytics Beta")
+# Header
+col1, col2 = st.columns([1, 4])
+with col1:
+    if Path("FMLogo.svg").exists():
+        st.image("FMLogo.svg", width=140)
+with col2:
+    st.markdown("## Frontera Metrics")
+    st.markdown("College basketball analytics")
 
 page = st.sidebar.radio(
     "Go to",
