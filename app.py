@@ -152,8 +152,7 @@ elif page == "Matchup Predictor":
         with col1:
             team1 = st.selectbox("Team 1", teams, key="matchup_team1")
         with col2:
-            default_team2_index = 1 if len(teams) > 1 else 0
-            team2 = st.selectbox("Team 2", teams, index=default_team2_index, key="matchup_team2")
+            team2 = st.selectbox("Team 2", teams, index=1 if len(teams) > 1 else 0, key="matchup_team2")
         with col3:
             site = st.selectbox("Site", ["neutral", "team1_home", "team2_home"], key="matchup_site")
 
@@ -165,7 +164,6 @@ elif page == "Matchup Predictor":
 
             st.markdown("---")
 
-            left, middle, right = st.columns([3, 1, 3])
             left, middle, right = st.columns([3, 1, 3])
 
             with left:
@@ -207,15 +205,9 @@ elif page == "Matchup Predictor":
                         unsafe_allow_html=True
                     )
 
-    st.markdown(
-        f"<div style='text-align:center; font-weight:600; font-size:20px; margin-top:10px;'>{team2}</div>",
-        unsafe_allow_html=True
-    )
+            st.markdown("")
 
-    st.markdown("</div>", unsafe_allow_html=True)
-st.markdown("")
-
-if st.button("Run Prediction", use_container_width=True):
+            if st.button("Run Prediction", use_container_width=True):
                 try:
                     result = simulate_matchup(team_stats_df, team1, team2, site)
 
@@ -248,7 +240,6 @@ if st.button("Run Prediction", use_container_width=True):
 
                 except Exception as e:
                     st.error(f"Prediction error: {e}")
-
 elif page == "Team Comparison":
     st.subheader("Team Comparison")
 
