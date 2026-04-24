@@ -1,5 +1,6 @@
 from pathlib import Path
 from datetime import datetime
+import json
 import requests
 import pandas as pd
 
@@ -12,12 +13,21 @@ RAW_DATA_DIR = BASE_DIR / "raw_data"
 TEAM_STATS_PATH = DATA_DIR / "team_stats_current.csv"
 PREDICTIONS_PATH = DATA_DIR / "model_predictions.csv"
 LOCAL_SCHEDULE_PATH = RAW_DATA_DIR / "full_season_games.csv"
+ADJUSTMENTS_PATH = DATA_DIR / "model_adjustments.json"
 
 ESPN_SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard"
 
 
 def get_target_date():
-    return "20260406"
+    return datetime.now().strftime("%Y%m%d")
+
+
+def load_model_adjustments():
+    if not ADJUSTMENTS_PATH.exists():
+        return {"margin_bias": 0, "total_bias": 0}
+
+    with open(ADJUSTMENTS_PATH, "r") as f:
+        return json.load(f)
 
 
 def get_espn_games(target_date):
@@ -169,6 +179,13 @@ def main():
 
     team_stats_df = pd.read_csv(TEAM_STATS_PATH)
     existing_df = load_existing_predictions()
+    adjustments = load_model_adjustments()
+
+    margin_bias = adjustments.get("margin_bias", 0)
+    total_bias = adjustments.get("total_bias", 0)
+
+    print(f"Using model adjustments: margin_bias={margin_bias}, total_bias={total_bias}")
+
     games_df = get_games_for_date(target_date)
 
     print(f"Games pulled: {len(games_df)}")
@@ -202,15 +219,27 @@ def main():
         try:
             result = simulate_matchup(team_stats_df, team1, team2, site)
 
+            raw_score1 = result["proj_score1"]
+            raw_score2 = result["proj_score2"]
+
+            raw_margin = raw_score1 - raw_score2
+            raw_total = raw_score1 + raw_score2
+
+            adjusted_margin = raw_margin - margin_bias
+            adjusted_total = raw_total - total_bias
+
+            adjusted_score1 = round((adjusted_total + adjusted_margin) / 2, 1)
+            adjusted_score2 = round((adjusted_total - adjusted_margin) / 2, 1)
+
             new_rows.append({
                 "game_date": game_date,
                 "team1": team1,
                 "team2": team2,
                 "site": site,
-                "model_score1": result["proj_score1"],
-                "model_score2": result["proj_score2"],
-                "model_margin_team1": result["proj_score1"] - result["proj_score2"],
-                "model_total": result["proj_score1"] + result["proj_score2"],
+                "model_score1": adjusted_score1,
+                "model_score2": adjusted_score2,
+                "model_margin_team1": adjusted_margin,
+                "model_total": adjusted_total,
                 "model_win_prob1": result.get("win_prob1"),
                 "model_win_prob2": result.get("win_prob2"),
                 "actual_score1": None,
@@ -228,7 +257,13 @@ def main():
         print("No new predictions added.")
         return
 
-    final_df = pd.concat([existing_df, pd.DataFrame(new_rows)], ignore_index=True)
+    new_df = pd.DataFrame(new_rows)
+
+    if existing_df.empty:
+        final_df = new_df
+    else:
+        final_df = pd.concat([existing_df, new_df], ignore_index=True)
+
     final_df.to_csv(PREDICTIONS_PATH, index=False)
 
     print(f"Added {len(new_rows)} games.")
