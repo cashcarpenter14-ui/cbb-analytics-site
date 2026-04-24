@@ -31,11 +31,13 @@ team_stats_path = DATA_DIR / "team_stats_current.csv"
 team_rankings_path = DATA_DIR / "team_rankings.csv"
 metadata_path = DATA_DIR / "model_metadata.json"
 branding_path = DATA_DIR / "team_branding.csv"
+predictions_path = DATA_DIR / "model_predictions.csv"
 
 team_stats_df = load_csv(team_stats_path) if team_stats_path.exists() else pd.DataFrame()
 team_rankings_df = load_csv(team_rankings_path) if team_rankings_path.exists() else pd.DataFrame()
 metadata = load_json(metadata_path) if metadata_path.exists() else {}
 branding_df = load_csv(branding_path) if branding_path.exists() else pd.DataFrame()
+predictions_df = load_csv(predictions_path) if predictions_path.exists() else pd.DataFrame()
 
 def get_team_logo(team_name):
     if branding_df.empty or "team" not in branding_df.columns or "logo_file" not in branding_df.columns:
@@ -71,7 +73,7 @@ with title_col:
 # --- NAV ---
 page = st.sidebar.radio(
     "Go to",
-    ["Home", "Ratings & Rankings", "Matchup Predictor", "Team Comparison"]
+    ["Home", "Ratings & Rankings", "Matchup Predictor", "Team Comparison, Model Accuracy"]
 )
 
 # --- PAGES ---
@@ -354,4 +356,93 @@ elif page == "Team Comparison":
                 advantage_df.style.apply(highlight_advantage, axis=1),
                 use_container_width=True
             )
+
+elif page == "Model Accuracy":
+    st.subheader("Model Accuracy Tracker")
+
+    if predictions_df.empty:
+        st.warning("No predictions found yet. Add data/model_predictions.csv with saved predictions.")
+    else:
+        df = predictions_df.copy()
+
+        required_cols = [
+            "team1", "team2",
+            "model_score1", "model_score2",
+            "actual_score1", "actual_score2",
+            "vegas_spread_team1", "vegas_total"
+        ]
+
+        missing_cols = [col for col in required_cols if col not in df.columns]
+
+        if missing_cols:
+            st.error(f"Missing columns: {missing_cols}")
+        else:
+            numeric_cols = [
+                "model_score1", "model_score2",
+                "actual_score1", "actual_score2",
+                "vegas_spread_team1", "vegas_total"
+            ]
+
+            for col in numeric_cols:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
+            completed = df.dropna(subset=[
+                "model_score1", "model_score2",
+                "actual_score1", "actual_score2"
+            ]).copy()
+
+            if completed.empty:
+                st.warning("No completed games with actual results yet.")
+            else:
+                completed["model_margin_team1"] = completed["model_score1"] - completed["model_score2"]
+                completed["actual_margin_team1"] = completed["actual_score1"] - completed["actual_score2"]
+
+                completed["model_total"] = completed["model_score1"] + completed["model_score2"]
+                completed["actual_total"] = completed["actual_score1"] + completed["actual_score2"]
+
+                completed["model_spread_error"] = (
+                    completed["model_margin_team1"] - completed["actual_margin_team1"]
+                ).abs()
+
+                completed["vegas_spread_error"] = (
+                    completed["vegas_spread_team1"] - completed["actual_margin_team1"]
+                ).abs()
+
+                completed["model_total_error"] = (
+                    completed["model_total"] - completed["actual_total"]
+                ).abs()
+
+                completed["vegas_total_error"] = (
+                    completed["vegas_total"] - completed["actual_total"]
+                ).abs()
+
+                completed["model_winner_correct"] = (
+                    (completed["model_margin_team1"] > 0) == (completed["actual_margin_team1"] > 0)
+                )
+
+                completed["model_beat_vegas_spread"] = completed["model_spread_error"] < completed["vegas_spread_error"]
+                completed["model_beat_vegas_total"] = completed["model_total_error"] < completed["vegas_total_error"]
+
+                total_games = len(completed)
+                winner_accuracy = completed["model_winner_correct"].mean()
+                avg_model_spread_error = completed["model_spread_error"].mean()
+                avg_vegas_spread_error = completed["vegas_spread_error"].mean()
+                avg_model_total_error = completed["model_total_error"].mean()
+                avg_vegas_total_error = completed["vegas_total_error"].mean()
+
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Games Tracked", total_games)
+                m2.metric("Winner Accuracy", f"{winner_accuracy:.1%}")
+                m3.metric("Model Beat Vegas Spread", f"{completed['model_beat_vegas_spread'].mean():.1%}")
+
+                s1, s2 = st.columns(2)
+                s1.metric("Avg Model Spread Error", f"{avg_model_spread_error:.2f}")
+                s2.metric("Avg Vegas Spread Error", f"{avg_vegas_spread_error:.2f}")
+
+                t1, t2 = st.columns(2)
+                t1.metric("Avg Model Total Error", f"{avg_model_total_error:.2f}")
+                t2.metric("Avg Vegas Total Error", f"{avg_vegas_total_error:.2f}")
+
+                st.markdown("### Game Log")
+                st.dataframe(completed, use_container_width=True)
             
