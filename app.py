@@ -356,142 +356,66 @@ elif page == "Model Accuracy":
     else:
         df = predictions_df.copy()
 
-        numeric_cols = [
-            "model_score1", "model_score2",
-            "actual_score1", "actual_score2",
-            "model_margin_team1", "model_total",
-            "model_win_prob1", "model_win_prob2",
-            "vegas_spread_team1", "vegas_total"
-        ]
-
-        for col in numeric_cols:
+        # Force numeric conversion
+        for col in ["model_score1", "model_score2", "actual_score1", "actual_score2"]:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
 
-        completed = df.dropna(subset=[
-            "model_score1", "model_score2",
-            "actual_score1", "actual_score2"
-        ]).copy()
+        # Only require ACTUAL scores
+        completed = df[
+            df["actual_score1"].notna() &
+            df["actual_score2"].notna()
+        ].copy()
 
         if completed.empty:
-            st.warning("Predictions have been saved, but no completed game results have been added yet.")
-            st.markdown("### Saved Predictions")
+            st.warning("Predictions exist, but no completed game results yet.")
             st.dataframe(df, use_container_width=True)
 
         else:
-            completed["model_margin_team1"] = completed["model_score1"] - completed["model_score2"]
-            completed["actual_margin_team1"] = completed["actual_score1"] - completed["actual_score2"]
+            # Core calculations
+            completed["model_margin"] = completed["model_score1"] - completed["model_score2"]
+            completed["actual_margin"] = completed["actual_score1"] - completed["actual_score2"]
 
             completed["model_total"] = completed["model_score1"] + completed["model_score2"]
             completed["actual_total"] = completed["actual_score1"] + completed["actual_score2"]
 
-            completed["model_winner_correct"] = (
-                (completed["model_margin_team1"] > 0) == (completed["actual_margin_team1"] > 0)
+            completed["winner_correct"] = (
+                (completed["model_margin"] > 0) ==
+                (completed["actual_margin"] > 0)
             )
 
-            completed["model_spread_error"] = (
-                completed["model_margin_team1"] - completed["actual_margin_team1"]
+            completed["spread_error"] = (
+                completed["model_margin"] - completed["actual_margin"]
             ).abs()
 
-            completed["model_total_error"] = (
+            completed["total_error"] = (
                 completed["model_total"] - completed["actual_total"]
             ).abs()
 
-            if "vegas_spread_team1" in completed.columns:
-                completed["vegas_spread_error"] = (
-                    completed["vegas_spread_team1"] - completed["actual_margin_team1"]
-                ).abs()
-            else:
-                completed["vegas_spread_error"] = pd.NA
-
-            if "vegas_total" in completed.columns:
-                completed["vegas_total_error"] = (
-                    completed["vegas_total"] - completed["actual_total"]
-                ).abs()
-            else:
-                completed["vegas_total_error"] = pd.NA
-
-            completed["model_beat_vegas_spread"] = (
-                completed["model_spread_error"] < completed["vegas_spread_error"]
-            )
-
-            completed["model_beat_vegas_total"] = (
-                completed["model_total_error"] < completed["vegas_total_error"]
-            )
-
-            total_games = len(completed)
-            winner_accuracy = completed["model_winner_correct"].mean()
-            avg_spread_error = completed["model_spread_error"].mean()
-            avg_total_error = completed["model_total_error"].mean()
-
+            # Metrics
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Games Graded", total_games)
-            m2.metric("Winner Accuracy", f"{winner_accuracy:.1%}")
-            m3.metric("Avg Spread Error", f"{avg_spread_error:.2f}")
-            m4.metric("Avg Total Error", f"{avg_total_error:.2f}")
+            m1.metric("Games Graded", len(completed))
+            m2.metric("Winner Accuracy", f"{completed['winner_correct'].mean():.1%}")
+            m3.metric("Avg Spread Error", f"{completed['spread_error'].mean():.2f}")
+            m4.metric("Avg Total Error", f"{completed['total_error'].mean():.2f}")
 
             st.markdown("---")
 
-            vegas_completed = completed.dropna(subset=["vegas_spread_error", "vegas_total_error"]).copy()
-
-            if vegas_completed.empty:
-                st.info("Vegas comparison will appear once Vegas spread and total columns are filled.")
-            else:
-                v1, v2, v3, v4 = st.columns(4)
-
-                v1.metric(
-                    "Avg Vegas Spread Error",
-                    f"{vegas_completed['vegas_spread_error'].mean():.2f}"
-                )
-
-                v2.metric(
-                    "Model Beat Vegas Spread",
-                    f"{vegas_completed['model_beat_vegas_spread'].mean():.1%}"
-                )
-
-                v3.metric(
-                    "Avg Vegas Total Error",
-                    f"{vegas_completed['vegas_total_error'].mean():.2f}"
-                )
-
-                v4.metric(
-                    "Model Beat Vegas Total",
-                    f"{vegas_completed['model_beat_vegas_total'].mean():.1%}"
-                )
-
-            st.markdown("---")
-
+            # Recent performance
             st.markdown("### Recent Performance")
-
-            recent = completed.tail(10).copy()
+            recent = completed.tail(10)
 
             r1, r2, r3 = st.columns(3)
-            r1.metric("Last 10 Winner Accuracy", f"{recent['model_winner_correct'].mean():.1%}")
-            r2.metric("Last 10 Spread Error", f"{recent['model_spread_error'].mean():.2f}")
-            r3.metric("Last 10 Total Error", f"{recent['model_total_error'].mean():.2f}")
+            r1.metric("Last 10 Accuracy", f"{recent['winner_correct'].mean():.1%}")
+            r2.metric("Last 10 Spread Error", f"{recent['spread_error'].mean():.2f}")
+            r3.metric("Last 10 Total Error", f"{recent['total_error'].mean():.2f}")
 
+            st.markdown("---")
+
+            # Game log
             st.markdown("### Game Log")
 
-            display_cols = [
-                "game_date",
-                "team1",
-                "team2",
-                "model_score1",
-                "model_score2",
-                "actual_score1",
-                "actual_score2",
-                "model_winner_correct",
-                "model_spread_error",
-                "model_total_error",
-                "vegas_spread_team1",
-                "vegas_total",
-                "vegas_spread_error",
-                "vegas_total_error",
-            ]
-
-            display_cols = [col for col in display_cols if col in completed.columns]
-
             st.dataframe(
-                completed[display_cols].sort_values("game_date", ascending=False),
+                completed.sort_values("game_date", ascending=False),
                 use_container_width=True
             )
