@@ -73,7 +73,7 @@ with title_col:
 # --- NAV ---
 page = st.sidebar.radio(
     "Go to",
-    ["Home", "Ratings & Rankings", "Matchup Predictor", "Team Comparison, Model Accuracy"]
+    ["Home", "Ratings & Rankings", "Matchup Predictor", "Team Comparison", "Model Accuracy"]
 )
 
 # --- PAGES ---
