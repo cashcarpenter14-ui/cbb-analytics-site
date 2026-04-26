@@ -1,1 +1,4 @@
 __pycache__/
+.DS_Store
+data/backtest_errors.csv
+data/backtest_results.csv
