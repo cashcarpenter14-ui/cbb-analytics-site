@@ -37,6 +37,10 @@ jobs:
       - name: Update actual results
         run: |
           python update_results.py
+          
+      - name: Update model adjustments
+        run: |
+         python update_model_adjustments.py
 
       - name: Commit updated data
         run: |
