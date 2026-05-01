@@ -1,3 +1,11 @@
 {
-  "teams": 362
+  "teams": 728,
+  "weights": {
+    "season": 0.6,
+    "last5": 0.25,
+    "site": 0.15
+  },
+  "ranking_formula": "Overall_Rating = 0.70 * Power_Rating + 0.30 * Elo_Normalized",
+  "power_rating_formula": "Power_Rating = off_eff - def_eff",
+  "default_site_for_rankings": "neutral"
 }
