@@ -10,9 +10,12 @@ from model import simulate_matchup
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 
+ASSETS_DIR = BASE_DIR / "assets"
+WEBSITE_LOGO_PATH = ASSETS_DIR / "fronedge_logos" / "FronEdgeScriptball.svg"  # adjust name if needed
+
 # --- PAGE CONFIG ---
 st.set_page_config(
-    page_title="Frontera Metrics",
+    page_title="FronEdge Metrics",
     layout="wide"
 )
 
@@ -39,6 +42,12 @@ metadata = load_json(metadata_path) if metadata_path.exists() else {}
 branding_df = load_csv(branding_path) if branding_path.exists() else pd.DataFrame()
 predictions_df = load_csv(predictions_path) if predictions_path.exists() else pd.DataFrame()
 
+# ✅ ADD THIS (displays logo — does not remove anything)
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    if WEBSITE_LOGO_PATH.exists():
+        st.image(str(WEBSITE_LOGO_PATH), width=300)
+
 def get_team_logo(team_name):
     if branding_df.empty or "team" not in branding_df.columns or "logo_file" not in branding_df.columns:
         return None
@@ -63,24 +72,24 @@ def get_team_logo(team_name):
 logo_col, title_col = st.columns([1, 4])
 
 with logo_col:
-    if Path("FMLogo.svg").exists():
-        st.image("FMLogo.svg", width=140)
+    if Path("FronEdgeScriptball.svg").exists():
+        st.image("FronEdgeScriptball.svg", width=140)
 
 with title_col:
-    st.markdown("## Frontera Metrics")
+    st.markdown("## FronEdge Metrics")
     st.markdown("COLLEGE BASKETBALL ANALYTICS")
 
 # --- NAV ---
 page = st.sidebar.radio(
     "Go to",
-    ["Home", "Ratings & Rankings", "Matchup Predictor", "Team Comparison", "Model Accuracy"]
+    ["Home", "Ratings & Rankings", "Matchup Predictor", "Team Comparison", "Teams", "Model Accuracy"]
 )
 
 # --- PAGES ---
 if page == "Home":
-    st.subheader("Welcome to Frontera Metrics")
+    st.subheader("Welcome to FronEdge Metrics")
     st.write(
-        "Frontera Metrics is a college basketball analytics platform built to provide "
+        "FronEdge Metrics is a college basketball analytics platform built to provide "
         "team ratings, matchup projections, and data-driven insights through a live, "
         "continuously improving model."
     )
@@ -240,6 +249,7 @@ elif page == "Matchup Predictor":
 
                 except Exception as e:
                     st.error(f"Prediction error: {e}")
+
 elif page == "Team Comparison":
     st.subheader("Team Comparison")
 
@@ -347,6 +357,143 @@ elif page == "Team Comparison":
                 advantage_df.style.apply(highlight_advantage, axis=1),
                 use_container_width=True
             )
+
+elif page == "Teams":
+    st.title("Teams")
+
+    team_stats_df["Team"] = (
+        team_stats_df["Team"]
+        .astype(str)
+        .str.replace("\xa0", " ", regex=False)
+        .str.strip()
+    )
+
+    ALL_TEAMS = sorted(team_stats_df["Team"].dropna().unique())
+
+    search = st.text_input("Search Team")
+
+    if search:
+        teams = [t for t in ALL_TEAMS if search.lower() in t.lower()]
+    else:
+        teams = ALL_TEAMS
+
+    if not teams:
+        st.warning("No teams found.")
+    else:
+        team = st.selectbox("Select a Team", teams)
+        row = team_stats_df[team_stats_df["Team"] == team].iloc[0]
+
+        st.header(team)
+
+        rank_match = team_rankings_df[team_rankings_df["Team"] == team]
+
+        if not rank_match.empty and "Rank" in rank_match.columns:
+            national_rank = int(rank_match["Rank"].iloc[0])
+            percentile = round((1 - (national_rank / len(team_rankings_df))) * 100, 1)
+        else:
+            national_rank = "N/A"
+            percentile = "N/A"
+
+        st.markdown("### Team Profile")
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Power Rating", round(row.get("Power_Rating", 0), 2))
+        c2.metric("National Rank", national_rank)
+        c3.metric("Percentile", f"{percentile}%" if percentile != "N/A" else "N/A")
+        c4.metric("Pace", round(row.get("possessions", 0), 1))
+
+        st.markdown("---")
+
+        st.markdown("### Core Efficiency")
+
+        e1, e2, e3 = st.columns(3)
+        e1.metric("Overall Rating", round(row.get("Overall_Rating", 0), 2))
+        e2.metric("Offensive Efficiency", round(row.get("off_eff", 0), 2))
+        e3.metric("Defensive Efficiency", round(row.get("def_eff", 0), 2))
+
+        st.markdown("---")
+
+        st.markdown("### Tournament Projection")
+
+        proj1, proj2, proj3, proj4 = st.columns(4)
+        proj1.metric("Tournament Status", row.get("tournament_status", "Not Calculated"))
+        proj2.metric("Projected Seed", row.get("projected_seed", "N/A"))
+        proj3.metric("Bubble Status", row.get("bubble_status", "N/A"))
+        proj4.metric("Projected Record", row.get("projected_record", "N/A"))
+
+        st.markdown("---")
+
+        st.markdown("### Recent Form")
+
+        trend = row.get("last5_off_eff", 0) - row.get("season_off_eff", 0)
+
+        if trend > 0:
+            st.success(f"Trending Up (+{round(trend, 2)} Off Eff last 5)")
+        elif trend < 0:
+            st.error(f"Trending Down ({round(trend, 2)} Off Eff last 5)")
+        else:
+            st.info("Recent form is flat compared to season average.")
+
+        st.markdown("---")
+
+        st.markdown("### Efficiency Profile")
+
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots()
+
+        labels = ["Off Eff", "Def Eff", "Avg"]
+        values = [
+            row.get("off_eff", 0),
+            row.get("def_eff", 0),
+            102.5
+        ]
+
+        ax.bar(labels, values)
+        ax.set_ylabel("Efficiency")
+        ax.set_title(f"{team} Efficiency Profile")
+
+        st.pyplot(fig)
+
+        st.markdown("---")
+
+        st.subheader("Performance Splits")
+
+        split_data = {
+            "Split": ["Season", "Last 5", "Home", "Away", "Neutral"],
+            "Off Eff": [
+                row.get("season_off_eff", None),
+                row.get("last5_off_eff", None),
+                row.get("home_off_eff", None),
+                row.get("away_off_eff", None),
+                row.get("neutral_off_eff", None),
+            ],
+            "Def Eff": [
+                row.get("season_def_eff", None),
+                row.get("last5_def_eff", None),
+                row.get("home_def_eff", None),
+                row.get("away_def_eff", None),
+                row.get("neutral_def_eff", None),
+            ],
+            "Pace": [
+                row.get("season_possessions", None),
+                row.get("last5_possessions", None),
+                row.get("home_possessions", None),
+                row.get("away_possessions", None),
+                row.get("neutral_possessions", None),
+            ],
+        }
+
+        split_df = pd.DataFrame(split_data)
+
+        for col in ["Off Eff", "Def Eff", "Pace"]:
+            split_df[col] = pd.to_numeric(split_df[col], errors="coerce").round(2)
+
+        st.dataframe(
+            split_df,
+            use_container_width=True,
+            hide_index=True
+        )
 
 elif page == "Model Accuracy":
     st.subheader("Model Accuracy Dashboard")

@@ -139,6 +139,7 @@ def main():
 
     new_df = pd.concat(new_rows, ignore_index=True)
 
+    # align columns
     for col in box.columns:
         if col not in new_df.columns:
             new_df[col] = np.nan

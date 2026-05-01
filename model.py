@@ -9,7 +9,7 @@ TEAM_NAME_MAP = {
     "Saint Josephs Hawks": "Saint Joseph's Hawks",
     "St Johns Red Storm": "St. John's Red Storm",
     "St. Johns Red Storm": "St. John's Red Storm",
-    "Queens University Royals": "Queens Royals",
+    "Queens Royals": "Queens University Royals",
     "Lindenwood Lions": "Lindenwood Lions",
     "Southern Indiana Screaming Eagles": "Southern Indiana Screaming Eagles",
 }
@@ -66,25 +66,88 @@ def get_weighted_stat(row, stat, site):
 
 def simulate_matchup(team_stats_df, team1_name, team2_name, site_value="neutral", n_sims=10000):
 
-    def project_team_box(team_row, projected_points):
-        fgm = max(12, round(projected_points / 2.15))
-        fga = max(fgm + 8, round(fgm / 0.45))
-        fg_pct = round(100 * fgm / fga, 1) if fga > 0 else 0.0
+    def project_team_box(team_row, projected_points, projected_possessions):
+        # Possessions-based shooting volume
+        shot_rate = safe_stat(
+            team_row,
+            ["season_shot_rate", "home_shot_rate", "away_shot_rate", "neutral_shot_rate"],
+            0.92
+        )
+        shot_rate = clamp(shot_rate, 0.82, 1.05)
+
+        fga = round(projected_possessions * shot_rate)
+
+        # FG%
+        fg_pct = safe_stat(
+            team_row,
+            ["season_fg_pct", "home_fg_pct", "away_fg_pct", "neutral_fg_pct"],
+            0.45
+        )
+        if fg_pct > 1:
+            fg_pct = fg_pct / 100
+        fg_pct = clamp(fg_pct, 0.35, 0.58)
+
+        fgm = round(fga * fg_pct)
 
         three_rate = safe_stat(
             team_row,
             ["season_three_rate", "home_three_rate", "away_three_rate", "neutral_three_rate"],
             0.38
         )
-
         if three_rate > 1:
             three_rate = three_rate / 100
+        three_rate = clamp(three_rate, 0.20, 0.55)
 
         three_att = max(8, round(fga * three_rate))
-        three_made = min(three_att, round(three_att * 0.34))
+        three_att = min(three_att, fga)
 
-        ftm = max(6, round(projected_points * 0.16))
-        fta = max(ftm + 1, round(ftm / 0.74))
+        three_pct = safe_stat(
+            team_row,
+            ["season_three_pct", "home_three_pct", "away_three_pct", "neutral_three_pct"],
+            0.34
+        )
+        if three_pct > 1:
+            three_pct = three_pct / 100
+        three_pct = clamp(three_pct, 0.25, 0.45)
+
+        three_made = min(three_att, round(three_att * three_pct))
+
+        # Free throw rate: FTA / FGA
+        ft_rate = safe_stat(
+            team_row,
+            ["season_ft_rate", "home_ft_rate", "away_ft_rate", "neutral_ft_rate"],
+            0.28
+        )
+        if ft_rate > 2:
+            ft_rate = ft_rate / 100
+        ft_rate = clamp(ft_rate, 0.12, 0.55)
+
+        fta = round(fga * ft_rate)
+
+        ft_pct = safe_stat(
+            team_row,
+            ["season_ft_pct", "home_ft_pct", "away_ft_pct", "neutral_ft_pct"],
+            0.74
+        )
+        if ft_pct > 1:
+            ft_pct = ft_pct / 100
+        ft_pct = clamp(ft_pct, 0.55, 0.88)
+
+        ftm = round(fta * ft_pct)
+
+        # Reconcile box-score shooting stats to projected points
+        estimated_points = (2 * fgm) + three_made + ftm
+        if estimated_points > 0:
+            scale = projected_points / estimated_points
+            fgm = max(12, round(fgm * scale))
+            fga = max(fgm + 8, round(fga * scale))
+            three_att = max(8, round(three_att * scale))
+            three_att = min(three_att, fga)
+            three_made = min(three_att, round(three_made * scale))
+            fta = max(ftm + 1, round(fta * scale))
+            ftm = min(fta, round(ftm * scale))
+
+        fg_pct_display = round(100 * fgm / fga, 1) if fga > 0 else 0.0
 
         oreb = round(safe_stat(
             team_row,
@@ -126,7 +189,7 @@ def simulate_matchup(team_stats_df, team1_name, team2_name, site_value="neutral"
             "PTS": int(projected_points),
             "FGM": int(fgm),
             "FGA": int(fga),
-            "FG%": fg_pct,
+            "FG%": fg_pct_display,
             "3PM": int(three_made),
             "3PA": int(three_att),
             "FTM": int(ftm),
@@ -176,19 +239,14 @@ def simulate_matchup(team_stats_df, team1_name, team2_name, site_value="neutral"
     possessions = (0.60 * geom_tempo) + (0.40 * avg_tempo)
     possessions = clamp(possessions, 62, 73)
 
-    # temper extreme efficiency matchups
-    adj1 = (def2 / LEAGUE_DEF_EFF)
-    adj2 = (def1 / LEAGUE_DEF_EFF)
+    adj1 = def2 / LEAGUE_DEF_EFF
+    adj2 = def1 / LEAGUE_DEF_EFF
 
-# shrink toward 1.0 (league average) to reduce inflation
     adj1 = 0.7 * adj1 + 0.3 * 1.0
     adj2 = 0.7 * adj2 + 0.3 * 1.0
 
-    exp_eff1 = off1 * adj1
-    exp_eff2 = off2 * adj2
-
-    exp_eff1 = clamp(exp_eff1, 85, 125)
-    exp_eff2 = clamp(exp_eff2, 85, 125)
+    exp_eff1 = clamp(off1 * adj1, 85, 125)
+    exp_eff2 = clamp(off2 * adj2, 85, 125)
 
     score1 = possessions * exp_eff1 / 100
     score2 = possessions * exp_eff2 / 100
@@ -200,7 +258,6 @@ def simulate_matchup(team_stats_df, team1_name, team2_name, site_value="neutral"
         score1 -= HOME_COURT_POINTS / 2
         score2 += HOME_COURT_POINTS / 2
 
-    # Fix scoring inflation bias
     raw_total = score1 + score2
     target_total = 149
     stabilized_total = (0.40 * raw_total) + (0.60 * target_total)
@@ -216,19 +273,10 @@ def simulate_matchup(team_stats_df, team1_name, team2_name, site_value="neutral"
     avg_off = (off1 + off2) / 2
     score_gap = abs(score1 - score2)
 
-# tighter variance for better totals
     sim_std = 8.0
-
-# smaller pace impact
     sim_std += (possessions - 67) * 0.08
-
-# smaller offensive inflation
     sim_std += (avg_off - 102) * 0.03
-
-# stronger reduction for mismatches
     sim_std -= min(score_gap, 20) * 0.05
-
-# tighter clamp
     sim_std = clamp(sim_std, 6.5, 10.5)
 
     sim_scores1 = np.random.normal(score1, sim_std, int(n_sims))
@@ -243,14 +291,21 @@ def simulate_matchup(team_stats_df, team1_name, team2_name, site_value="neutral"
     )
     win_prob2 = 1 - win_prob1
 
-    spread = round_half(float(np.mean(sim_scores1 - sim_scores2)))
-    total_line = round_half(float(np.mean(sim_scores1 + sim_scores2)))
-
     proj1 = int(round(np.mean(sim_scores1)))
     proj2 = int(round(np.mean(sim_scores2)))
 
-    box1 = project_team_box(row1, proj1)
-    box2 = project_team_box(row2, proj2)
+    spread = round_half(min(proj1, proj2) - max(proj1, proj2))
+    total_line = round_half(proj1 + proj2)
+
+    if proj1 > proj2:
+        favorite = team1_name
+    elif proj2 > proj1:
+        favorite = team2_name
+    else:
+        favorite = "Even"
+
+    box1 = project_team_box(row1, proj1, possessions)
+    box2 = project_team_box(row2, proj2, possessions)
 
     return {
         "team1": team1_name,
@@ -260,7 +315,8 @@ def simulate_matchup(team_stats_df, team1_name, team2_name, site_value="neutral"
         "team2_site_used": site2,
         "proj_score1": proj1,
         "proj_score2": proj2,
-        "spread_team1": spread,
+        "favorite": favorite,
+        "spread": spread,
         "total": total_line,
         "win_prob1": round(win_prob1, 4),
         "win_prob2": round(win_prob2, 4),
