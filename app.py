@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 import pandas as pd
 import streamlit as st
@@ -454,6 +455,23 @@ elif page == "Teams":
         ax.set_title(f"{team} Efficiency Profile")
 
         st.pyplot(fig)
+
+        st.markdown("---")
+        st.subheader("Tournament Resume")
+
+        r1, r2, r3, r4 = st.columns(4)
+
+        r1.metric("Tournament Rank", int(row.get("Tournament_Rank", 0)))
+        r2.metric("SOS Rating", round(row.get("SOS_Rating", 0), 2))
+        r3.metric("Quality Wins", int(row.get("quality_win", 0)))
+        r4.metric("Bad Losses", int(row.get("bad_loss", 0)))
+
+        r5, r6, r7, r8 = st.columns(4)
+
+        r5.metric("Resume Score", round(row.get("Resume_Score", 0), 2))
+        r6.metric("Tournament Status", row.get("tournament_status", "N/A"))
+        r7.metric("Projected Seed", row.get("projected_seed", "N/A"))
+        r8.metric("Bubble Status", row.get("bubble_status", "N/A"))
 
         st.markdown("---")
 
