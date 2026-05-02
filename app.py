@@ -1,11 +1,25 @@
 import json
 from pathlib import Path
 import matplotlib.pyplot as plt
+import requests
+from datetime import datetime
 
 import pandas as pd
 import streamlit as st
 
+import matplotlib.pyplot as plt
 from model import simulate_matchup
+
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+
+def add_logo_to_chart(ax, x, y, logo_path, zoom=0.05):
+    try:
+        img = plt.imread(str(logo_path))
+        imagebox = OffsetImage(img, zoom=zoom)
+        ab = AnnotationBbox(imagebox, (x, y), frameon=False)
+        ax.add_artist(ab)
+    except Exception:
+        ax.scatter(x, y, s=25)
 
 # --- PATHS ---
 BASE_DIR = Path(__file__).parent
@@ -83,8 +97,43 @@ with title_col:
 # --- NAV ---
 page = st.sidebar.radio(
     "Go to",
-    ["Home", "Ratings & Rankings", "Matchup Predictor", "Team Comparison", "Teams", "Model Accuracy"]
+    ["Home", "Ratings & Rankings", "Matchup Predictor", "Team Comparison", "Teams", "Daily Slate", "Model Accuracy"]
 )
+def fetch_today_slate():
+    today = datetime.now().strftime("%Y%m%d")
+    url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates={today}"
+
+    try:
+        r = requests.get(url, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+    except Exception:
+        return pd.DataFrame()
+
+    games = []
+
+    for event in data.get("events", []):
+        comp = event.get("competitions", [{}])[0]
+        competitors = comp.get("competitors", [])
+
+        if len(competitors) != 2:
+            continue
+
+        home = next((t for t in competitors if t.get("homeAway") == "home"), None)
+        away = next((t for t in competitors if t.get("homeAway") == "away"), None)
+
+        if home is None or away is None:
+            continue
+
+        games.append({
+            "game_id": event.get("id"),
+            "date": event.get("date"),
+            "home_team": home.get("team", {}).get("displayName"),
+            "away_team": away.get("team", {}).get("displayName"),
+            "neutral_site": bool(comp.get("neutralSite", False)),
+        })
+
+    return pd.DataFrame(games)
 
 # --- PAGES ---
 if page == "Home":
@@ -150,6 +199,36 @@ elif page == "Ratings & Rankings":
 
         st.dataframe(rankings_df, use_container_width=True)
 
+        st.markdown("### Efficiency Map")
+
+        chart_df = team_rankings_df.copy()
+
+        fig, ax = plt.subplots(figsize=(12, 8))
+
+        for _, team_row in chart_df.iterrows():
+            team_name = team_row["Team"]
+            x = team_row.get("off_eff", None)
+            y = team_row.get("def_eff", None)
+
+            if pd.notna(x) and pd.notna(y):
+                logo_path = get_team_logo(team_name)
+
+                if logo_path:
+                    add_logo_to_chart(ax, x, y, logo_path)
+                else:
+                    ax.scatter(x, y, s=25)
+
+        ax.axvline(102.5, linestyle="--", linewidth=1)
+        ax.axhline(102.5, linestyle="--", linewidth=1)
+
+        ax.set_xlabel("Offensive Efficiency")
+        ax.set_ylabel("Defensive Efficiency")
+        ax.set_title("Team Efficiency Map")
+
+        ax.invert_yaxis()
+
+        st.pyplot(fig)
+
 elif page == "Matchup Predictor":
     st.subheader("Matchup Predictor")
 
@@ -173,6 +252,14 @@ elif page == "Matchup Predictor":
             logo2 = get_team_logo(team2)
 
             st.markdown("---")
+        def add_logo_to_chart(ax, x, y, logo_path, zoom=0.045):
+            try:
+                img = plt.imread(str(logo_path))
+                imagebox = OffsetImage(img, zoom=zoom)
+                ab = AnnotationBbox(imagebox, (x, y), frameon=False)
+                ax.add_artist(ab)
+            except Exception:
+                ax.scatter(x, y, s=25)
 
             left, middle, right = st.columns([3, 1, 3])
 
@@ -439,16 +526,16 @@ elif page == "Teams":
 
         st.markdown("### Efficiency Profile")
 
-        import matplotlib.pyplot as plt
+        st.markdown("### Efficiency Profile")
 
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(6, 4))
 
-        labels = ["Off Eff", "Def Eff", "Avg"]
+        labels = ["Off Eff", "Def Eff", "D1 Avg"]
         values = [
             row.get("off_eff", 0),
             row.get("def_eff", 0),
             102.5
-        ]
+]
 
         ax.bar(labels, values)
         ax.set_ylabel("Efficiency")
@@ -457,7 +544,7 @@ elif page == "Teams":
         st.pyplot(fig)
 
         st.markdown("---")
-        st.subheader("Tournament Resume")
+        st.subheader("Resume")
 
         r1, r2, r3, r4 = st.columns(4)
 
@@ -512,6 +599,59 @@ elif page == "Teams":
             use_container_width=True,
             hide_index=True
         )
+        
+elif page == "Daily Slate":
+    st.title("Daily Slate Predictor")
+
+    slate = fetch_today_slate()
+
+    if slate.empty:
+        st.warning("No games found for today.")
+    else:
+        rows = []
+
+        for _, game in slate.iterrows():
+            home = game["home_team"]
+            away = game["away_team"]
+
+            site_value = "neutral" if game["neutral_site"] else "team1_home"
+
+            try:
+                result = simulate_matchup(
+                    team_stats_df=team_stats_df,
+                    team1_name=home,
+                    team2_name=away,
+                    site_value=site_value,
+                    n_sims=1000
+                )
+
+                rows.append({
+                    "Game": f"{away} at {home}" if not game["neutral_site"] else f"{away} vs {home}",
+                    "Projected Score": f"{result['team1']} {result['proj_score1']} - {result['team2']} {result['proj_score2']}",
+                    "Favorite": result.get("favorite", "N/A"),
+                    "Spread": result.get("spread", "N/A"),
+                    "Total": result.get("total", "N/A"),
+                    "Home Win %": f"{result['win_prob1'] * 100:.1f}%",
+                })
+
+            except Exception as e:
+                rows.append({
+                    "Game": f"{away} at {home}",
+                    "Projected Score": "Unavailable",
+                    "Favorite": "N/A",
+                    "Spread": "N/A",
+                    "Total": "N/A",
+                    "Home Win %": "N/A",
+                    "Error": str(e)
+                })
+
+        slate_df = pd.DataFrame(rows)
+
+        st.dataframe(
+            slate_df,
+            use_container_width=True,
+            hide_index=True
+        )
 
 elif page == "Model Accuracy":
     st.subheader("Model Accuracy Dashboard")
@@ -557,17 +697,48 @@ elif page == "Model Accuracy":
                 completed["model_total"] - completed["actual_total"]
             ).abs()
 
-            # Metrics
+            
+            st.markdown("---")
+
+            st.title("Model Accuracy Dashboard")
+            st.caption("Performance based on saved model predictions with completed results.")
+
+            st.markdown("### Overall Performance")
+
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Games Graded", len(completed))
+            m1.metric("Games Graded", f"{len(completed):,}")
             m2.metric("Winner Accuracy", f"{completed['winner_correct'].mean():.1%}")
             m3.metric("Avg Spread Error", f"{completed['spread_error'].mean():.2f}")
             m4.metric("Avg Total Error", f"{completed['total_error'].mean():.2f}")
 
             st.markdown("---")
 
-            # Recent performance
+            left, right = st.columns(2)
+
+            with left:
+                st.markdown("### Spread Error Distribution")
+
+                fig, ax = plt.subplots(figsize=(6, 4))
+                ax.hist(completed["spread_error"].dropna(), bins=25)
+                ax.set_xlabel("Spread Error")
+                ax.set_ylabel("Games")
+                ax.set_title("Spread Error")
+                st.pyplot(fig)
+
+            with right:
+                st.markdown("### Total Error Distribution")
+
+                fig2, ax2 = plt.subplots(figsize=(6, 4))
+                ax2.hist(completed["total_error"].dropna(), bins=25)
+                ax2.set_xlabel("Total Error")
+                ax2.set_ylabel("Games")
+                ax2.set_title("Total Error")
+                st.pyplot(fig2)
+
+            st.markdown("---")
+
             st.markdown("### Recent Performance")
+
             recent = completed.tail(10)
 
             r1, r2, r3 = st.columns(3)
@@ -576,6 +747,26 @@ elif page == "Model Accuracy":
             r3.metric("Last 10 Total Error", f"{recent['total_error'].mean():.2f}")
 
             st.markdown("---")
+
+            st.markdown("### Game Log")
+            st.dataframe(
+                completed.sort_values("game_date", ascending=False),
+                use_container_width=True,
+                hide_index=True
+)
+            st.markdown("---")
+            st.markdown("### Error Distribution")
+
+            import matplotlib.pyplot as plt
+
+            fig, ax = plt.subplots(figsize=(8, 5))
+
+            ax.hist(completed["spread_error"].dropna(), bins=25)
+            ax.set_xlabel("Spread Error")
+            ax.set_ylabel("Games")
+            ax.set_title("Distribution of Spread Prediction Error")
+
+            st.pyplot(fig)
 
             # Game log
             st.markdown("### Game Log")
