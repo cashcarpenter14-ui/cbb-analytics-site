@@ -2,3 +2,21 @@ __pycache__/
 .DS_Store
 data/backtest_errors.csv
 data/backtest_results.csv
+
+# Backups
+*backup*
+*_backup.py
+
+# Cache
+__pycache__/
+*.pyc
+
+# Generated data
+data/backtest_results_*.csv
+data/backtest_summary_*.csv
+data/logo_issues.csv
+
+# Large raw exports
+raw_data/full_season_games_complete.csv
+raw_data/team_boxscores_with_postseason_2026.csv
+
