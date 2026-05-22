@@ -14,9 +14,11 @@ TEAM_NAME_MAP = {
     "Southern Indiana Screaming Eagles": "Southern Indiana Screaming Eagles",
 }
 
+# --- GLOBAL MODEL SETTINGS ---
 LEAGUE_DEF_EFF = 102.5
 HOME_COURT_POINTS = 3.0
 
+# Default weighting profile
 SEASON_WEIGHT = 0.60
 LAST5_WEIGHT = 0.25
 SITE_WEIGHT = 0.15
@@ -65,34 +67,16 @@ def get_weighted_stat(row, stat, site):
 
 
 def simulate_matchup(team_stats_df, team1_name, team2_name, site_value="neutral", n_sims=10000):
-
-    def project_team_box(team_row, projected_points, projected_possessions):
-        # Possessions-based shooting volume
-        shot_rate = safe_stat(
-            team_row,
-            ["season_shot_rate", "home_shot_rate", "away_shot_rate", "neutral_shot_rate"],
-            0.92
-        )
-        shot_rate = clamp(shot_rate, 0.82, 1.05)
-
-        fga = round(projected_possessions * shot_rate)
-
-        # FG%
-        fg_pct = safe_stat(
-            team_row,
-            ["season_fg_pct", "home_fg_pct", "away_fg_pct", "neutral_fg_pct"],
-            0.45
-        )
-        if fg_pct > 1:
-            fg_pct = fg_pct / 100
-        fg_pct = clamp(fg_pct, 0.35, 0.58)
-
-        fgm = round(fga * fg_pct)
+    def project_team_box(team_row, projected_points):
+        # Estimated shooting profile
+        fgm = max(12, round(projected_points / 2.15))
+        fga = max(fgm + 8, round(fgm / 0.45))
+        fg_pct = round(100 * fgm / fga, 1) if fga > 0 else 0.0
 
         three_rate = safe_stat(
             team_row,
             ["season_three_rate", "home_three_rate", "away_three_rate", "neutral_three_rate"],
-            0.38
+            0.38,
         )
         if three_rate > 1:
             three_rate = three_rate / 100
@@ -100,102 +84,75 @@ def simulate_matchup(team_stats_df, team1_name, team2_name, site_value="neutral"
 
         three_att = max(8, round(fga * three_rate))
         three_att = min(three_att, fga)
+        three_made = min(three_att, round(three_att * 0.34))
 
-        three_pct = safe_stat(
-            team_row,
-            ["season_three_pct", "home_three_pct", "away_three_pct", "neutral_three_pct"],
-            0.34
-        )
-        if three_pct > 1:
-            three_pct = three_pct / 100
-        three_pct = clamp(three_pct, 0.25, 0.45)
-
-        three_made = min(three_att, round(three_att * three_pct))
-
-        # Free throw rate: FTA / FGA
-        ft_rate = safe_stat(
-            team_row,
-            ["season_ft_rate", "home_ft_rate", "away_ft_rate", "neutral_ft_rate"],
-            0.28
-        )
-        if ft_rate > 2:
-            ft_rate = ft_rate / 100
-        ft_rate = clamp(ft_rate, 0.12, 0.55)
-
-        fta = round(fga * ft_rate)
-
-        ft_pct = safe_stat(
-            team_row,
-            ["season_ft_pct", "home_ft_pct", "away_ft_pct", "neutral_ft_pct"],
-            0.74
-        )
-        if ft_pct > 1:
-            ft_pct = ft_pct / 100
-        ft_pct = clamp(ft_pct, 0.55, 0.88)
-
-        ftm = round(fta * ft_pct)
-
-        # Reconcile box-score shooting stats to projected points
-        estimated_points = (2 * fgm) + three_made + ftm
-        if estimated_points > 0:
-            scale = projected_points / estimated_points
-            fgm = max(12, round(fgm * scale))
-            fga = max(fgm + 8, round(fga * scale))
-            three_att = max(8, round(three_att * scale))
-            three_att = min(three_att, fga)
-            three_made = min(three_att, round(three_made * scale))
-            fta = max(ftm + 1, round(fta * scale))
-            ftm = min(fta, round(ftm * scale))
-
-        fg_pct_display = round(100 * fgm / fga, 1) if fga > 0 else 0.0
+        ftm = max(6, round(projected_points * 0.16))
+        fta = max(ftm + 1, round(ftm / 0.74))
 
         oreb = round(safe_stat(
             team_row,
-            ["season_offensiveRebounds", "home_offensiveRebounds", "away_offensiveRebounds", "neutral_offensiveRebounds"],
-            9
+            [
+                "season_offensiveRebounds",
+                "home_offensiveRebounds",
+                "away_offensiveRebounds",
+                "neutral_offensiveRebounds",
+                "OREB",
+                "offensiveRebounds",
+            ],
+            9,
         ))
 
         dreb = round(safe_stat(
             team_row,
-            ["season_defensiveRebounds", "home_defensiveRebounds", "away_defensiveRebounds", "neutral_defensiveRebounds"],
-            24
+            [
+                "season_defensiveRebounds",
+                "home_defensiveRebounds",
+                "away_defensiveRebounds",
+                "neutral_defensiveRebounds",
+                "DREB",
+                "defensiveRebounds",
+            ],
+            24,
         ))
 
         ast = round(safe_stat(
             team_row,
-            ["season_assists", "home_assists", "away_assists", "neutral_assists"],
-            max(8, fgm * 0.55)
+            ["season_assists", "home_assists", "away_assists", "neutral_assists", "AST", "assists"],
+            max(8, fgm * 0.55),
         ))
 
         tov = round(safe_stat(
             team_row,
-            ["season_turnovers", "home_turnovers", "away_turnovers", "neutral_turnovers"],
-            12
+            ["season_turnovers", "home_turnovers", "away_turnovers", "neutral_turnovers", "TO", "TOV", "turnovers"],
+            12,
         ))
 
         stl = round(safe_stat(
             team_row,
-            ["season_steals", "home_steals", "away_steals", "neutral_steals"],
-            6
+            ["season_steals", "home_steals", "away_steals", "neutral_steals", "STL", "steals"],
+            6,
         ))
 
         blk = round(safe_stat(
             team_row,
-            ["season_blocks", "home_blocks", "away_blocks", "neutral_blocks"],
-            4
+            ["season_blocks", "home_blocks", "away_blocks", "neutral_blocks", "BLK", "blocks"],
+            4,
         ))
 
         return {
             "PTS": int(projected_points),
             "FGM": int(fgm),
             "FGA": int(fga),
-            "FG%": fg_pct_display,
+            "FG%": fg_pct,
             "3PM": int(three_made),
             "3PA": int(three_att),
             "FTM": int(ftm),
             "FTA": int(fta),
+            "OREB": int(oreb),
+            "DREB": int(dreb),
             "REB": int(oreb + dreb),
             "AST": int(ast),
+            "TO": int(tov),
             "TOV": int(tov),
             "STL": int(stl),
             "BLK": int(blk),
@@ -234,11 +191,37 @@ def simulate_matchup(team_stats_df, team1_name, team2_name, site_value="neutral"
     def2 = get_weighted_stat(row2, "def_eff", site2)
     tempo2 = get_weighted_stat(row2, "possessions", site2)
 
+    # --- DYNAMIC TEMPO INTERACTION ---
+    # When styles differ, the geometric mean keeps totals from getting inflated.
     geom_tempo = math.sqrt(max(tempo1, 1) * max(tempo2, 1))
     avg_tempo = (tempo1 + tempo2) / 2
-    possessions = (0.60 * geom_tempo) + (0.40 * avg_tempo)
+    tempo_gap = abs(tempo1 - tempo2)
+
+    tempo_weight_geom = 0.70 + min(tempo_gap / 25, 0.15)
+    tempo_weight_avg = 1 - tempo_weight_geom
+
+    possessions = (
+        tempo_weight_geom * geom_tempo +
+        tempo_weight_avg * avg_tempo
+    )
+
+    # --- OFFENSIVE REBOUNDING EXTRA-POSSESSION EFFECT ---
+    oreb1 = safe_stat(
+        row1,
+        ["season_offensiveRebounds", f"{site1}_offensiveRebounds", "offensiveRebounds", "OREB"],
+        9,
+    )
+    oreb2 = safe_stat(
+        row2,
+        ["season_offensiveRebounds", f"{site2}_offensiveRebounds", "offensiveRebounds", "OREB"],
+        9,
+    )
+
+    oreb_bonus = ((oreb1 + oreb2) - 18) * 0.18
+    possessions += oreb_bonus
     possessions = clamp(possessions, 62, 73)
 
+    # Defense adjustment: lower defensive efficiency is better.
     adj1 = def2 / LEAGUE_DEF_EFF
     adj2 = def1 / LEAGUE_DEF_EFF
 
@@ -247,6 +230,35 @@ def simulate_matchup(team_stats_df, team1_name, team2_name, site_value="neutral"
 
     exp_eff1 = clamp(off1 * adj1, 85, 125)
     exp_eff2 = clamp(off2 * adj2, 85, 125)
+
+    # --- TURNOVER PRESSURE MISMATCH ---
+    # Steals from one team plus turnovers from the opponent can swing margin/efficiency.
+    tov1 = safe_stat(
+        row1,
+        ["season_turnovers", f"{site1}_turnovers", "turnovers", "TO", "TOV"],
+        12,
+    )
+    tov2 = safe_stat(
+        row2,
+        ["season_turnovers", f"{site2}_turnovers", "turnovers", "TO", "TOV"],
+        12,
+    )
+    stl1 = safe_stat(
+        row1,
+        ["season_steals", f"{site1}_steals", "steals", "STL"],
+        6,
+    )
+    stl2 = safe_stat(
+        row2,
+        ["season_steals", f"{site2}_steals", "steals", "STL"],
+        6,
+    )
+
+    turnover_edge1 = (stl1 - tov2) * 0.45
+    turnover_edge2 = (stl2 - tov1) * 0.45
+
+    exp_eff1 = clamp(exp_eff1 + turnover_edge1, 82, 128)
+    exp_eff2 = clamp(exp_eff2 + turnover_edge2, 82, 128)
 
     score1 = possessions * exp_eff1 / 100
     score2 = possessions * exp_eff2 / 100
@@ -259,28 +271,75 @@ def simulate_matchup(team_stats_df, team1_name, team2_name, site_value="neutral"
         score2 += HOME_COURT_POINTS / 2
 
     raw_total = score1 + score2
-    target_total = 149
-    stabilized_total = (0.40 * raw_total) + (0.60 * target_total)
+
+    # --- DYNAMIC TOTAL CALIBRATION ---
+    # Lets high-efficiency matchups breathe while still stabilizing noisy totals.
+    avg_off = (off1 + off2) / 2
+    target_total = 149 + ((avg_off - 102) * 0.9)
+
+    stabilized_total = (
+        0.48 * raw_total +
+        0.52 * target_total
+    )
 
     if raw_total > 0:
         scale = stabilized_total / raw_total
         score1 *= scale
         score2 *= scale
 
+    # --- POSTSEASON / NEUTRAL-SITE COMPRESSION ---
+    # Tournament-style games tend to have tighter margins and more neutral-site variance.
+    if site_value == "neutral":
+        avg_score = (score1 + score2) / 2
+        score1 = avg_score + ((score1 - avg_score) * 0.92)
+        score2 = avg_score + ((score2 - avg_score) * 0.92)
+
+        # Slightly suppress neutral-site scoring environment
+        score1 *= 0.985
+        score2 *= 0.985
+
     score1 = clamp(score1, 50, 105)
     score2 = clamp(score2, 50, 105)
 
-    avg_off = (off1 + off2) / 2
     score_gap = abs(score1 - score2)
 
     sim_std = 8.0
     sim_std += (possessions - 67) * 0.08
     sim_std += (avg_off - 102) * 0.03
-    sim_std -= min(score_gap, 20) * 0.05
-    sim_std = clamp(sim_std, 6.5, 10.5)
+    sim_std -= min(score_gap, 20) * 0.04
 
-    sim_scores1 = np.random.normal(score1, sim_std, int(n_sims))
-    sim_scores2 = np.random.normal(score2, sim_std, int(n_sims))
+    # Neutral-site / postseason-style games are more volatile.
+    if site_value == "neutral":
+        sim_std += 0.75
+
+    # Extra volatility for three-point-heavy style.
+    three_rate1 = safe_stat(
+        row1,
+        ["season_three_rate", f"{site1}_three_rate", "three_rate"],
+        0.38,
+    )
+    three_rate2 = safe_stat(
+        row2,
+        ["season_three_rate", f"{site2}_three_rate", "three_rate"],
+        0.38,
+    )
+    if three_rate1 > 1:
+        three_rate1 /= 100
+    if three_rate2 > 1:
+        three_rate2 /= 100
+
+    avg_three_rate = (three_rate1 + three_rate2) / 2
+    if avg_three_rate > 0.42:
+        sim_std += min((avg_three_rate - 0.42) * 8, 0.60)
+
+    sim_std = clamp(sim_std, 7.0, 11.25)
+
+    seed_text = f"{team1_name}-{team2_name}-{site_value}"
+    seed = abs(hash(seed_text)) % (2**32)
+    rng = np.random.default_rng(seed)
+
+    sim_scores1 = rng.normal(score1, sim_std, int(n_sims))
+    sim_scores2 = rng.normal(score2, sim_std, int(n_sims))
 
     sim_scores1 = np.clip(sim_scores1, 35, 130)
     sim_scores2 = np.clip(sim_scores2, 35, 130)
@@ -294,18 +353,74 @@ def simulate_matchup(team_stats_df, team1_name, team2_name, site_value="neutral"
     proj1 = int(round(np.mean(sim_scores1)))
     proj2 = int(round(np.mean(sim_scores2)))
 
-    spread = round_half(min(proj1, proj2) - max(proj1, proj2))
     total_line = round_half(proj1 + proj2)
+    margin = abs(proj1 - proj2)
 
     if proj1 > proj2:
         favorite = team1_name
+        underdog = team2_name
+        spread = -round_half(margin)
+        favorite_win_prob = win_prob1
     elif proj2 > proj1:
         favorite = team2_name
+        underdog = team1_name
+        spread = -round_half(margin)
+        favorite_win_prob = win_prob2
     else:
         favorite = "Even"
+        underdog = "Even"
+        spread = 0.0
+        favorite_win_prob = 0.5
 
-    box1 = project_team_box(row1, proj1, possessions)
-    box2 = project_team_box(row2, proj2, possessions)
+    if favorite == "Even":
+        line_display = "Even"
+    else:
+        line_display = f"{favorite} {spread}"
+
+    if favorite_win_prob >= 0.70:
+        confidence = "High"
+    elif favorite_win_prob >= 0.58:
+        confidence = "Medium"
+    else:
+        confidence = "Low"
+
+    if margin <= 3 and favorite_win_prob < 0.60:
+        upset_alert = "High upset potential"
+    elif margin <= 6:
+        upset_alert = "Moderate upset potential"
+    else:
+        upset_alert = "Low upset potential"
+
+    volatility = round_half(sim_std)
+
+    # --- GAME ARCHETYPE TAGS ---
+    if possessions > 69 and avg_off > 110:
+        game_style = "Shootout"
+
+    elif possessions < 66 and avg_def < 98:
+        game_style = "Grindfest"
+
+    elif margin >= 18:
+        game_style = "Mismatch"
+  
+    elif margin <= 5:
+        game_style = "Toss-Up"
+
+    else:
+        game_style = "Balanced"
+
+    # --- VOLATILITY TAG ---
+    if sim_std >= 10:
+        volatility_tag = "High Variance"
+
+    elif sim_std >= 8.5:
+        volatility_tag = "Moderate Variance"
+
+    else:
+        volatility_tag = "Low Variance"
+
+    box1 = project_team_box(row1, proj1)
+    box2 = project_team_box(row2, proj2)
 
     return {
         "team1": team1_name,
@@ -316,7 +431,15 @@ def simulate_matchup(team_stats_df, team1_name, team2_name, site_value="neutral"
         "proj_score1": proj1,
         "proj_score2": proj2,
         "favorite": favorite,
+        "underdog": underdog,
         "spread": spread,
+        "line_display": line_display,
+        "favorite_win_prob": round(favorite_win_prob, 4),
+        "confidence": confidence,
+        "upset_alert": upset_alert,
+        "volatility": volatility,
+        "volatility_tag": volatility_tag,
+        "game_style": game_style,
         "total": total_line,
         "win_prob1": round(win_prob1, 4),
         "win_prob2": round(win_prob2, 4),

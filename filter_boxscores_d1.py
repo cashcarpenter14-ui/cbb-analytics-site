@@ -14,7 +14,7 @@ TEAM_NAME_MAP = {
 }
 
 games = pd.read_csv(GAMES_PATH)
-boxscores = pd.read_csv(BOXSCORES_PATH, skiprows=1)
+boxscores = pd.read_csv(BOXSCORES_PATH)
 elo = pd.read_csv(ELO_PATH)
 
 games.columns = [str(c).strip() for c in games.columns]

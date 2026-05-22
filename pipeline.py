@@ -430,6 +430,13 @@ def calculate_recent_form(row):
 
     return (recent_off - season_off) - (recent_def - season_def)
 
+# --- DIFFICULTY-ADJUSTED EFFECTIVENESS ---
+
+team_stats["Difficulty_Adjusted_Effectiveness"] = (
+    0.40 * team_stats["Power_Rating"] +
+    0.35 * team_stats["SOS_Rating"] +
+    0.25 * team_stats["Resume_Score"]
+)
 
 def calculate_tournament_score(row):
     overall = row.get("Overall_Rating", 0)
