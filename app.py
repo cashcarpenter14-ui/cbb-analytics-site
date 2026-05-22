@@ -746,23 +746,33 @@ elif page == "Ratings & Rankings":
     if team_rankings_df.empty:
         st.warning("No team rankings found. Run pipeline.py first.")
     else:
+        rankings_source = team_rankings_df.copy()
+
+        if "Difficulty_Adjusted_Effectiveness" not in rankings_source.columns:
+            if "Overall_Rating" in rankings_source.columns and "SOS_Rating" in rankings_source.columns:
+                rankings_source["Difficulty_Adjusted_Effectiveness"] = (
+                    rankings_source["Overall_Rating"] + rankings_source["SOS_Rating"]
+                )
+            else:
+                rankings_source["Difficulty_Adjusted_Effectiveness"] = rankings_source.get("Overall_Rating", 0)
+
         a, b = st.columns(2)
         with a:
-            show_top_table("Overall Rating Leaders", team_rankings_df, "Overall_Rating", ["Team", "Overall_Rating", "Power_Rating", "off_eff", "def_eff"], False, 10)
+            show_top_table("Overall Rating Leaders", rankings_source, "Overall_Rating", ["Team", "Overall_Rating", "Power_Rating", "off_eff", "def_eff"], False, 10)
         with b:
-            show_top_table("Difficulty-Adjusted Leaders", team_rankings_df, "Difficulty_Adjusted_Effectiveness", ["Team", "Difficulty_Adjusted_Effectiveness", "SOS_Rating", "Resume_Score", "Tournament_Rank"], False, 10)
+            show_top_table("Difficulty-Adjusted Leaders", rankings_source, "Difficulty_Adjusted_Effectiveness", ["Team", "Difficulty_Adjusted_Effectiveness", "SOS_Rating", "Resume_Score", "Tournament_Rank"], False, 10)
 
         c, d = st.columns(2)
         with c:
-            show_top_table("Elite Offenses", team_rankings_df, "off_eff", ["Team", "off_eff", "Overall_Rating", "possessions"], False, 10)
+            show_top_table("Elite Offenses", rankings_source, "off_eff", ["Team", "off_eff", "Overall_Rating", "possessions"], False, 10)
         with d:
-            show_top_table("Elite Defenses", team_rankings_df, "def_eff", ["Team", "def_eff", "Overall_Rating", "SOS_Rating"], True, 10)
+            show_top_table("Elite Defenses", rankings_source, "def_eff", ["Team", "def_eff", "Overall_Rating", "SOS_Rating"], True, 10)
 
         st.markdown("---")
         st.markdown("### Full Rankings Table")
 
         metric_view = st.radio("View", ["Overall", "Difficulty-Adjusted", "Offense", "Defense", "Tempo"], horizontal=True)
-        rankings_df = team_rankings_df.copy()
+        rankings_df = rankings_source.copy()
 
         if metric_view == "Overall":
             sort_col = "Overall_Rating" if "Overall_Rating" in rankings_df.columns else "Elo"
@@ -787,14 +797,15 @@ elif page == "Ratings & Rankings":
 
         if sort_col in rankings_df.columns:
             rankings_df = rankings_df.sort_values(sort_col, ascending=ascending).reset_index(drop=True)
+
         rankings_df["Rank"] = range(1, len(rankings_df) + 1)
         show_cols = [c for c in ["Rank"] + show_cols if c in rankings_df.columns]
         st.dataframe(clean_numeric(rankings_df[show_cols]), use_container_width=True, hide_index=True)
 
         st.markdown("---")
         st.markdown("### Efficiency Map")
-        render_full_efficiency_map(team_rankings_df)
-
+        render_full_efficiency_map(rankings_source)
+        
 elif page == "Matchup Predictor":
     st.title("Matchup Predictor")
     st.caption("Clean matchup projection with score, line, total, confidence, style, and detailed tabs.")
