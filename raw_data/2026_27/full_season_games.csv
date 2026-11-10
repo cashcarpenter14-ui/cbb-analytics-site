@@ -504,3 +504,4 @@ game_id,date,status,home_team,away_team,home_team_id,away_team_id,home_score,awa
 401925737,2026-11-10,STATUS_FINAL,Washington Huskies,Mississippi Valley State Delta Devils,264,2400,77,64,False,2026-11-10T03:00Z,,
 401926132,2026-11-10,STATUS_FINAL,Purdue Boilermakers,Illinois State Redbirds,2509,2287,76,59,False,2026-11-10T01:30Z,,
 401926181,2026-11-10,STATUS_FINAL,UIC Flames,UNC Greensboro Spartans,82,2430,82,72,False,2026-11-10T00:00Z,,
+401929003,2026-11-10,STATUS_FINAL,Hawai'i Rainbow Warriors,Portland Pilots,62,2501,66,73,False,2026-11-10T04:59Z,,
