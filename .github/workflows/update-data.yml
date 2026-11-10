@@ -1,20 +1,36 @@
-name: Update Data Pipeline
+
+name: Update FronEdge 2026-27 Data
 
 on:
   schedule:
-    - cron: "0 14 * * *"
+    # 7 AM Central Standard Time (8 AM during daylight saving)
+    - cron: "0 13 * * *"
+
+    # 12 PM Central Standard Time (1 PM during daylight saving)
+    - cron: "0 18 * * *"
+
+    # 1 AM Central Standard Time (2 AM during daylight saving)
+    - cron: "0 7 * * *"
+
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: fronedge-2026-27-update
+  cancel-in-progress: false
+
 jobs:
   update-data:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -24,34 +40,49 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas numpy requests
+          pip install pandas numpy requests scipy scikit-learn
 
-      - name: Run data pipeline
+      - name: Verify required scripts and inputs
         run: |
-          python pipeline.py
+          test -f update_2026_27_data.py
+          test -f pipeline_2026_27.py
+          test -f save_daily_predictions_2026_27.py
+          test -f update_results_2026_27.py
+          test -f raw_data/elo_ratings_d1.csv
+          test -f data/team_conferences.csv
+          test -f pipeline.py
+          echo "Required scripts and inputs exist."
 
-      - name: Save daily predictions
+      - name: Collect latest ESPN games and box scores
         run: |
-          python save_daily_predictions.py
+          python update_2026_27_data.py
 
-      - name: Update actual results
+      - name: Run 2026-27 pipeline
         run: |
-          python update_results.py
-          
-      - name: Update model adjustments
-        run: |
-         python update_model_adjustments.py
+          python pipeline_2026_27.py
 
-      - name: Commit updated data
+      - name: Save pregame predictions
         run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git add data/
-          git add assets/ || true
+          python save_daily_predictions_2026_27.py
+
+      - name: Update completed game results
+        run: |
+          python update_results_2026_27.py
+
+      - name: Commit updated 2026-27 data
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add raw_data/2026_27/
+          git add data/2026_27_candidate/team_stats_current.csv
+          git add data/2026_27_candidate/team_rankings.csv
+          git add data/2026_27_candidate/model_metadata.json
+          git add data/2026_27_candidate/model_predictions.csv
 
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
-            git commit -m "Auto-update data and predictions"
+            git commit -m "Update FronEdge 2026-27 data"
             git push
           fi
