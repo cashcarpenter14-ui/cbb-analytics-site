@@ -626,6 +626,7 @@ game_id,date,status,home_team,away_team,home_team_id,away_team_id,home_score,awa
 401920135,2026-11-13,STATUS_FINAL,Western Illinois Leathernecks,Cal State Bakersfield Roadrunners,2710,2934,83,91,False,2026-11-13T00:00Z,,
 401920412,2026-11-13,STATUS_FINAL,High Point Panthers,Southern Utah Thunderbirds,2272,253,88,59,False,2026-11-13T00:00Z,,
 401920566,2026-11-13,STATUS_FINAL,Towson Tigers,Loyola Maryland Greyhounds,119,2352,90,60,False,2026-11-13T00:00Z,,
+401921167,2026-11-13,STATUS_FINAL,Cleveland State Vikings,West Florida Argonauts,325,2697,69,67,True,2026-11-13T20:00Z,,
 401921741,2026-11-13,STATUS_FINAL,BYU Cougars,Montana State Bobcats,252,147,86,71,False,2026-11-13T02:00Z,,
 401921768,2026-11-13,STATUS_FINAL,West Virginia Mountaineers,Mercer Bears,277,2382,75,61,False,2026-11-13T00:00Z,,
 401922239,2026-11-13,STATUS_FINAL,Howard Bison,Stetson Hatters,47,56,75,62,False,2026-11-13T00:00Z,,

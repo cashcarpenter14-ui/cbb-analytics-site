@@ -152,7 +152,7 @@ game_date,team1,team2,site,model_score1,model_score2,model_margin_team1,model_to
 2026-11-12,BYU Cougars,Montana State Bobcats,team1_home,89.0,80.0,9,169,0.7876,0.2124,86.0,71.0,,,401921741,2026-11-13T02:00:00+00:00,2026-11-12T15:45:05.784891+00:00,True
 2026-11-12,UTEP Miners,New Mexico State Aggies,team1_home,87.0,64.0,23,151,0.9821,0.0179,60.0,58.0,,,401911533,2026-11-13T02:00:00+00:00,2026-11-12T15:45:05.786544+00:00,True
 2026-11-12,San José State Spartans,UC Riverside Highlanders,team1_home,79.0,68.0,11,147,0.8331,0.1669,75.0,80.0,,,401911471,2026-11-13T03:00:00+00:00,2026-11-12T15:45:05.788183+00:00,True
-2026-11-13,Cleveland State Vikings,West Florida Argonauts,neutral,70.0,81.0,-11,151,0.1825,0.8175,,,,,401921167,2026-11-13T20:00:00+00:00,2026-11-13T15:04:56.984631+00:00,True
+2026-11-13,Cleveland State Vikings,West Florida Argonauts,neutral,70.0,81.0,-11,151,0.1825,0.8175,69.0,67.0,,,401921167,2026-11-13T20:00:00+00:00,2026-11-13T15:04:56.984631+00:00,True
 2026-11-13,Miami Hurricanes,North Alabama Lions,team1_home,85.0,65.0,20,150,0.9604,0.0396,,,,,401921721,2026-11-13T22:00:00+00:00,2026-11-13T15:04:56.986495+00:00,True
 2026-11-13,Florida State Seminoles,Texas A&M-Corpus Christi Islanders,team1_home,85.0,64.0,21,149,0.9761,0.0239,,,,,401909696,2026-11-13T22:00:00+00:00,2026-11-13T15:04:56.988323+00:00,True
 2026-11-13,Rutgers Scarlet Knights,Bryant Bulldogs,team1_home,91.0,59.0,32,150,0.9985,0.0015,,,,,401923270,2026-11-13T23:00:00+00:00,2026-11-13T15:04:56.990135+00:00,True
