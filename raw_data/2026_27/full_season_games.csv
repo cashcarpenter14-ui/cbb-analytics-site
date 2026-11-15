@@ -741,6 +741,7 @@ game_id,date,status,home_team,away_team,home_team_id,away_team_id,home_score,awa
 401921063,2026-11-15,STATUS_FINAL,San Francisco Dons,Portland State Vikings,2539,2502,68,84,False,2026-11-15T00:00Z,,
 401921775,2026-11-15,STATUS_FINAL,Villanova Wildcats,Rider Broncs,222,2520,99,62,False,2026-11-15T00:00Z,,
 401922031,2026-11-15,STATUS_FINAL,North Dakota Fighting Hawks,Montana Grizzlies,155,149,71,80,False,2026-11-15T02:00Z,,
+401924858,2026-11-15,STATUS_FINAL,Central Connecticut Blue Devils,Quinnipiac Bobcats,2115,2514,72,67,False,2026-11-15T17:00Z,,
 401925063,2026-11-15,STATUS_FINAL,Nicholls Colonels,Louisiana Tech Bulldogs,2447,2348,71,68,False,2026-11-15T01:00Z,,
 401925079,2026-11-15,STATUS_FINAL,Little Rock Trojans,Northwestern State Demons,2031,2466,84,83,False,2026-11-15T01:00Z,,
 401925108,2026-11-15,STATUS_FINAL,UT Arlington Mavericks,UT Rio Grande Valley Vaqueros,250,292,85,77,False,2026-11-15T00:00Z,,
