@@ -10,9 +10,9 @@
   "default_site_for_rankings": "neutral",
   "season": "2026-27",
   "candidate_only": true,
-  "completed_games": 781,
-  "complete_d1_boxscore_games": 638,
-  "elo_updates": 638,
+  "completed_games": 782,
+  "complete_d1_boxscore_games": 639,
+  "elo_updates": 639,
   "elo_k_unvalidated": 20,
   "elo_home_advantage_unvalidated": 65
 }

@@ -780,3 +780,4 @@ game_id,date,status,home_team,away_team,home_team_id,away_team_id,home_score,awa
 401920896,2026-11-16,STATUS_FINAL,Wisconsin Badgers,Coastal Carolina Chanticleers,275,324,89,81,False,2026-11-16T01:00Z,,
 401926772,2026-11-16,STATUS_FINAL,USC Trojans,Arkansas-Pine Bluff Golden Lions,30,2029,122,46,False,2026-11-16T00:00Z,,
 401929200,2026-11-16,STATUS_FINAL,UTSA Roadrunners,Texas State Bobcats,2636,326,67,87,False,2026-11-16T01:00Z,,
+401929419,2026-11-16,STATUS_FINAL,UTEP Miners,Florida A&M Rattlers,2638,50,79,46,False,2026-11-16T19:00Z,,
