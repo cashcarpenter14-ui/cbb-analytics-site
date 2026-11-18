@@ -784,6 +784,7 @@ game_id,date,status,home_team,away_team,home_team_id,away_team_id,home_score,awa
 401926772,2026-11-16,STATUS_FINAL,USC Trojans,Arkansas-Pine Bluff Golden Lions,30,2029,122,46,False,2026-11-16T00:00Z,,
 401929200,2026-11-16,STATUS_FINAL,UTSA Roadrunners,Texas State Bobcats,2636,326,67,87,False,2026-11-16T01:00Z,,
 401929419,2026-11-16,STATUS_FINAL,UTEP Miners,Florida A&M Rattlers,2638,50,79,46,False,2026-11-16T19:00Z,,
+401906773,2026-11-17,STATUS_FINAL,Florida Gators,Notre Dame Fighting Irish,57,87,86,78,True,2026-11-17T21:51Z,,
 401906783,2026-11-17,STATUS_FINAL,Georgia Bulldogs,Jacksonville Dolphins,61,294,107,62,False,2026-11-17T00:00Z,,
 401909798,2026-11-17,STATUS_FINAL,Kansas State Wildcats,Montana Grizzlies,2306,149,86,45,False,2026-11-17T01:00Z,,
 401911240,2026-11-17,STATUS_FINAL,Virginia Tech Hokies,Richmond Spiders,259,257,85,68,False,2026-11-17T00:00Z,,
