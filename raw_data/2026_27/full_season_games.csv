@@ -819,6 +819,7 @@ game_id,date,status,home_team,away_team,home_team_id,away_team_id,home_score,awa
 401909697,2026-11-18,STATUS_FINAL,Florida State Seminoles,Ball State Cardinals,52,2050,85,71,False,2026-11-18T00:00Z,,
 401909708,2026-11-18,STATUS_FINAL,Pittsburgh Panthers,Villanova Wildcats,221,222,81,61,False,2026-11-18T00:00Z,,
 401909729,2026-11-18,STATUS_FINAL,Wake Forest Demon Deacons,Monmouth Hawks,154,2405,81,76,False,2026-11-18T00:00Z,,
+401909753,2026-11-18,STATUS_FINAL,Baylor Bears,Jackson State Tigers,239,2296,104,55,False,2026-11-18T17:00Z,,
 401909787,2026-11-18,STATUS_FINAL,Kansas Jayhawks,UNLV Rebels,2305,2439,102,77,True,2026-11-18T02:30Z,,
 401911018,2026-11-18,STATUS_FINAL,William & Mary Tribe,Bowling Green Falcons,2729,189,77,73,False,2026-11-18T00:00Z,,
 401911019,2026-11-18,STATUS_FINAL,Dayton Flyers,Central Michigan Chippewas,2168,2117,88,63,False,2026-11-18T00:00Z,,

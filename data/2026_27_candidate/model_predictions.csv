@@ -365,7 +365,7 @@ game_date,team1,team2,site,model_score1,model_score2,model_margin_team1,model_to
 2026-11-17,California Baptist Lancers,Seattle U Redhawks,team1_home,71.0,75.0,-4,146,0.3484,0.6516,54.0,83.0,,,401917533,2026-11-18T03:00:00+00:00,2026-11-17T01:20:07.302179+00:00,True
 2026-11-17,Gonzaga Bulldogs,Montana State Bobcats,team1_home,88.0,75.0,13,163,0.8609,0.1391,74.0,62.0,,,401925879,2026-11-18T04:00:00+00:00,2026-11-17T01:20:07.303976+00:00,True
 2026-11-17,Auburn Tigers,West Virginia Mountaineers,neutral,69.0,83.0,-14,152,0.14,0.86,70.0,76.0,,,401920512,2026-11-18T04:59:00+00:00,2026-11-17T01:20:07.305740+00:00,True
-2026-11-18,Baylor Bears,Jackson State Tigers,team1_home,92.0,59.0,33,151,0.9981,0.0019,,,,,401909753,2026-11-18T17:00:00+00:00,2026-11-18T00:16:46.644062+00:00,True
+2026-11-18,Baylor Bears,Jackson State Tigers,team1_home,92.0,59.0,33,151,0.9981,0.0019,104.0,55.0,,,401909753,2026-11-18T17:00:00+00:00,2026-11-18T00:16:46.644062+00:00,True
 2026-11-18,UNC Asheville Bulldogs,Tennessee Tech Golden Eagles,team1_home,82.0,75.0,7,157,0.7092,0.2908,,,,,401922292,2026-11-18T23:30:00+00:00,2026-11-18T00:16:46.646286+00:00,True
 2026-11-18,South Carolina Upstate Spartans,Samford Bulldogs,team1_home,76.0,72.0,4,148,0.6226,0.3774,,,,,401922283,2026-11-18T23:30:00+00:00,2026-11-18T00:16:46.647796+00:00,True
 2026-11-18,Winthrop Eagles,Chattanooga Mocs,team1_home,83.0,82.0,1,165,0.5466,0.4534,,,,,401920974,2026-11-18T23:30:00+00:00,2026-11-18T00:16:46.649261+00:00,True
