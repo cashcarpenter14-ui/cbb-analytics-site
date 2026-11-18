@@ -837,6 +837,7 @@ game_id,date,status,home_team,away_team,home_team_id,away_team_id,home_score,awa
 401920308,2026-11-18,STATUS_FINAL,Georgia Tech Yellow Jackets,Norfolk State Spartans,59,2450,93,79,False,2026-11-18T00:00Z,,
 401920426,2026-11-18,STATUS_FINAL,Virginia Cavaliers,Old Dominion Monarchs,258,295,85,65,False,2026-11-18T02:00Z,,
 401920512,2026-11-18,STATUS_FINAL,Auburn Tigers,West Virginia Mountaineers,2,277,70,76,True,2026-11-18T04:59Z,,
+401920513,2026-11-18,STATUS_FINAL,Notre Dame Fighting Irish,Rutgers Scarlet Knights,87,164,110,100,True,2026-11-18T19:00Z,,
 401920720,2026-11-18,STATUS_FINAL,Utah Utes,Eastern Washington Eagles,254,331,67,71,False,2026-11-18T01:30Z,,
 401920857,2026-11-18,STATUS_FINAL,Marshall Thundering Herd,East Tennessee State Buccaneers,276,2193,67,55,False,2026-11-18T00:00Z,,
 401920921,2026-11-18,STATUS_FINAL,Mount St. Mary's Mountaineers,Lehigh Mountain Hawks,116,2329,65,99,False,2026-11-18T00:00Z,,
