@@ -888,6 +888,7 @@ game_id,date,status,home_team,away_team,home_team_id,away_team_id,home_score,awa
 401920158,2026-11-19,STATUS_FINAL,UCLA Bruins,Cal State Fullerton Titans,26,2239,75,71,False,2026-11-19T03:30Z,,
 401920515,2026-11-19,STATUS_FINAL,West Virginia Mountaineers,Kansas Jayhawks,277,2305,82,86,True,2026-11-19T00:30Z,,
 401920516,2026-11-19,STATUS_FINAL,Auburn Tigers,UNLV Rebels,2,2439,86,71,True,2026-11-19T03:30Z,,
+401920517,2026-11-19,STATUS_FINAL,West Virginia Mountaineers,Florida Gators,277,57,72,85,True,2026-11-19T19:30Z,,
 401920682,2026-11-19,STATUS_FINAL,St. John's Red Storm,Siena Saints,2599,2561,119,72,False,2026-11-19T00:00Z,,
 401920694,2026-11-19,STATUS_FINAL,Yale Bulldogs,Vermont Catamounts,43,261,76,74,False,2026-11-19T00:00Z,,
 401920751,2026-11-19,STATUS_FINAL,Cincinnati Bearcats,Youngstown State Penguins,2132,2754,91,54,False,2026-11-19T00:30Z,,
