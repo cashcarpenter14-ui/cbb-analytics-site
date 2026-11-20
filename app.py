@@ -1,4 +1,7 @@
+import re
+import base64
 import json
+from io import BytesIO
 from pathlib import Path
 from datetime import datetime
 
@@ -8,6 +11,7 @@ import requests
 import streamlit as st
 from matplotlib.offsetbox import AnnotationBbox, OffsetImage
 from matplotlib.patches import Rectangle
+from PIL import Image, ImageChops
 
 from model import simulate_matchup
 
@@ -210,6 +214,188 @@ st.markdown(
         color: #059669;
         font-weight: 800;
     }
+
+    .fe-logo-table {
+        background: #ffffff;
+        border: 1px solid var(--fe-border);
+        border-radius: 16px;
+        padding: 12px 14px;
+        box-shadow: 0 8px 20px rgba(7, 27, 51, 0.05);
+        margin-bottom: 0.75rem;
+        overflow: hidden;
+        max-width: 100%;
+    }
+
+    .fe-logo-table {
+        font-size: 0.88rem;
+    }
+
+    .fe-logo-table-team {
+        font-size: 0.88rem;
+    }
+
+    .fe-logo-table-blue,
+    .fe-logo-table-green {
+        font-size: 0.88rem;
+    }   
+
+    .fe-logo-row {
+        display: grid;
+        grid-template-columns: 30px 34px minmax(135px, 1fr) 58px 58px 58px;
+        align-items: center;
+        column-gap: 6px;
+        padding: 6px 2px;
+        border-bottom: 1px solid #edf1f6;
+    }
+
+    .fe-logo-row:last-child {
+        border-bottom: none;
+    }
+
+    .fe-logo-header {
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--fe-muted);
+        font-weight: 850;
+        padding-bottom: 8px;
+    }
+
+    .fe-rank-num {
+        font-weight: 850;
+        color: var(--fe-navy);
+        white-space: nowrap;
+        text-align: left;
+        min-width: 32px;
+    }
+
+    .fe-team-logo-wrap {
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .fe-team-logo-wrap img {
+        max-width: 27px;
+        max-height: 27px;
+        object-fit: contain;
+        display: block;
+    }
+
+    .fe-team-logo-placeholder {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: #eef3fb;
+        border: 1px solid #d7e0ee;
+    }
+
+    .fe-logo-table-team {
+        font-weight: 850;
+        color: var(--fe-navy);
+        line-height: 1.15;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .fe-logo-table-blue {
+        color: var(--fe-blue);
+        font-weight: 850;
+        text-align: right;
+    }
+
+    .fe-logo-table-green {
+        color: #059669;
+        font-weight: 850;
+        text-align: right;
+    }
+
+
+
+    .fe-mini-card {
+        background: #ffffff;
+        border: 1px solid var(--fe-border);
+        border-radius: 16px;
+        padding: 14px 16px;
+        box-shadow: 0 8px 20px rgba(7, 27, 51, 0.045);
+        min-height: 214px;
+        overflow: hidden;
+    }
+
+    .fe-insight-list {
+        border-left: 4px solid var(--fe-blue);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 13px;
+        font-size: 0.92rem;
+        line-height: 1.35;
+        color: var(--fe-navy);
+    }
+
+    .fe-insight-list b {
+        font-weight: 850;
+    }
+
+    .fe-top-performer-row {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr) 58px 72px;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 0;
+        border-bottom: 1px solid #edf1f6;
+        font-size: 0.84rem;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .fe-top-performer-row:last-child {
+        border-bottom: none;
+    }
+
+    .fe-top-performer-row img {
+        max-width: 24px;
+        max-height: 24px;
+        object-fit: contain;
+        display: block;
+    }
+
+    .fe-top-performer-team {
+        font-weight: 800;
+        color: var(--fe-navy);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+    }
+
+    .fe-top-performer-value {
+        font-weight: 850;
+        color: #059669;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .fe-top-performer-cat {
+        color: #31445c;
+        font-size: 0.76rem;
+        text-align: right;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .fe-view-link {
+        margin-top: -4px;
+        margin-bottom: 4px;
+        color: var(--fe-blue);
+        font-weight: 750;
+        font-size: 0.86rem;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -257,14 +443,47 @@ postseason_summary_df = load_csv(postseason_summary_path) if postseason_summary_
 # -----------------------------
 # Helpers
 # -----------------------------
-def add_logo_to_chart(ax, x, y, logo_path, zoom=0.05):
+def _trim_transparent_image(img):
+    """Trim transparent/white padding so team logos render at a consistent visual size."""
+    if img.mode != "RGBA":
+        img = img.convert("RGBA")
+
+    alpha = img.getchannel("A")
+    bbox = alpha.getbbox()
+    if bbox:
+        img = img.crop(bbox)
+    return img
+
+
+def _normalized_logo_array(logo_path, canvas_size=220, padding=18):
+    """Return a square RGBA numpy-friendly image with the logo centered."""
+    img = Image.open(str(logo_path)).convert("RGBA")
+    img = _trim_transparent_image(img)
+
+    max_side = canvas_size - (padding * 2)
+    img.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+
+    canvas = Image.new("RGBA", (canvas_size, canvas_size), (255, 255, 255, 0))
+    x = (canvas_size - img.width) // 2
+    y = (canvas_size - img.height) // 2
+    canvas.paste(img, (x, y), img)
+    return canvas
+
+
+def add_logo_to_chart(ax, x, y, logo_path, zoom=0.08):
     try:
-        img = plt.imread(str(logo_path))
+        img = _normalized_logo_array(logo_path)
         imagebox = OffsetImage(img, zoom=zoom)
-        ab = AnnotationBbox(imagebox, (x, y), frameon=False)
+        ab = AnnotationBbox(
+            imagebox,
+            (x, y),
+            frameon=False,
+            zorder=6,
+            box_alignment=(0.5, 0.5),
+        )
         ax.add_artist(ab)
     except Exception:
-        ax.scatter(x, y, s=25)
+        ax.scatter(x, y, s=35, zorder=6)
 
 
 def clean_numeric(df):
@@ -321,6 +540,25 @@ def section_label(text):
     st.markdown(f"<div class='fe-section-label'>{text}</div>", unsafe_allow_html=True)
 
 
+def logo_data_uri(logo_path):
+    """Embed local logos as data URIs so Streamlit Cloud renders them clearly in HTML tables."""
+    try:
+        path = Path(logo_path)
+        suffix = path.suffix.lower()
+        mime = "image/png"
+        if suffix == ".svg":
+            mime = "image/svg+xml"
+        elif suffix in [".jpg", ".jpeg"]:
+            mime = "image/jpeg"
+        elif suffix == ".webp":
+            mime = "image/webp"
+
+        encoded = base64.b64encode(path.read_bytes()).decode("utf-8")
+        return f"data:{mime};base64,{encoded}"
+    except Exception:
+        return None
+
+
 def show_top_table(title, df, sort_col, cols, ascending=False, n=10):
     section_label(title)
 
@@ -335,14 +573,22 @@ def show_top_table(title, df, sort_col, cols, ascending=False, n=10):
 
 
 
-def render_logo_rankings_table(title, df, sort_col, ascending=False, n=10):
+def render_logo_rankings_table(
+    title,
+    df,
+    sort_col,
+    ascending=False,
+    n=10,
+    net_col="Overall_Rating",
+    net_label="Net",
+):
     section_label(title)
 
     if df.empty or sort_col not in df.columns:
         st.info("Data not available yet.")
         return
 
-    needed = ["Team", "off_eff", "def_eff", "Overall_Rating"]
+    needed = ["Team", "off_eff", "def_eff", net_col]
     missing = [c for c in needed if c not in df.columns]
     if missing:
         st.info("Ranking data not available yet.")
@@ -350,32 +596,66 @@ def render_logo_rankings_table(title, df, sort_col, ascending=False, n=10):
 
     display = df.sort_values(sort_col, ascending=ascending).head(n).reset_index(drop=True)
 
-    with st.container(border=True):
-        h_rank, h_logo, h_team, h_off, h_def, h_net = st.columns([0.35, 0.45, 2.4, 0.8, 0.8, 0.8])
-        h_rank.markdown("<div class='fe-rank-header'>#</div>", unsafe_allow_html=True)
-        h_logo.markdown("<div class='fe-rank-header'></div>", unsafe_allow_html=True)
-        h_team.markdown("<div class='fe-rank-header'>Team</div>", unsafe_allow_html=True)
-        h_off.markdown("<div class='fe-rank-header'>Off</div>", unsafe_allow_html=True)
-        h_def.markdown("<div class='fe-rank-header'>Def</div>", unsafe_allow_html=True)
-        h_net.markdown("<div class='fe-rank-header'>Net</div>", unsafe_allow_html=True)
+    rows_html = [
+        "<div class='fe-logo-row fe-logo-header'>"
+        "<div>#</div>"
+        "<div></div>"
+        "<div>Team</div>"
+        "<div style='text-align:right;'>Off</div>"
+        "<div style='text-align:right;'>Def</div>"
+        f"<div style='text-align:right;'>{net_label}</div>"
+        "</div>"
+    ]
 
-        for idx, row in display.iterrows():
-            team = row.get("Team", "N/A")
-            logo = get_team_logo(team)
-            rank_col, logo_col, team_col, off_col, def_col, net_col = st.columns([0.35, 0.45, 2.4, 0.8, 0.8, 0.8])
+    for idx, row in display.iterrows():
+        team = str(row.get("Team", "N/A"))
+        logo_path = get_team_logo(team)
+        logo_uri = logo_data_uri(logo_path) if logo_path else None
 
-            rank_col.markdown(f"**{idx + 1}**")
+        if logo_uri:
+            logo_html = f"<img src='{logo_uri}' alt='{team} logo' />"
+        else:
+            logo_html = "<div class='fe-team-logo-placeholder'></div>"
 
-            if logo is not None:
-                logo_col.image(str(logo), width=30)
-            else:
-                logo_col.markdown("")
+        rows_html.append(
+            "<div class='fe-logo-row'>"
+            f"<div class='fe-rank-num'>{idx + 1}</div>"
+            f"<div class='fe-team-logo-wrap'>{logo_html}</div>"
+            f"<div class='fe-logo-table-team'>{team}</div>"
+            f"<div class='fe-logo-table-blue'>{safe_metric_value(row, 'off_eff')}</div>"
+            f"<div class='fe-logo-table-green'>{safe_metric_value(row, 'def_eff')}</div>"
+            f"<div class='fe-logo-table-blue'>{safe_metric_value(row, net_col)}</div>"
+            "</div>"
+        )
 
-            team_col.markdown(f"<div class='fe-rank-team'>{team}</div>", unsafe_allow_html=True)
-            off_col.markdown(f"<div class='fe-rank-stat-blue'>{safe_metric_value(row, 'off_eff')}</div>", unsafe_allow_html=True)
-            def_col.markdown(f"<div class='fe-rank-stat-green'>{safe_metric_value(row, 'def_eff')}</div>", unsafe_allow_html=True)
-            net_col.markdown(f"<div class='fe-rank-stat-blue'>{safe_metric_value(row, 'Overall_Rating')}</div>", unsafe_allow_html=True)
+    table_html = "<div class='fe-logo-table'>" + "".join(rows_html) + "</div>"
+    st.markdown(table_html, unsafe_allow_html=True)
 
+
+
+def render_top_performers_card(rows):
+    html_rows = []
+    for row in rows:
+        team = str(row.get("Team", "N/A"))
+        logo_path = get_team_logo(team)
+        logo_uri = logo_data_uri(logo_path) if logo_path else None
+        logo_html = f"<img src='{logo_uri}' alt='{team} logo' />" if logo_uri else "<div class='fe-team-logo-placeholder'></div>"
+        html_rows.append(
+            "<div class='fe-top-performer-row'>"
+            f"<div>{logo_html}</div>"
+            f"<div class='fe-top-performer-team'>{team}</div>"
+            f"<div class='fe-top-performer-value'>{row.get('Value', 'N/A')}</div>"
+            f"<div class='fe-top-performer-cat'>{row.get('Category', '')}</div>"
+            "</div>"
+        )
+    st.markdown("<div class='fe-mini-card'>" + "".join(html_rows) + "</div>", unsafe_allow_html=True)
+
+
+def render_insight_list_card(lines):
+    if not lines:
+        lines = ["Insight data unavailable."]
+    items = "".join(f"<div>{line}</div>" for line in lines)
+    st.markdown(f"<div class='fe-mini-card fe-insight-list'>{items}</div>", unsafe_allow_html=True)
 
 def get_team_logo(team_name):
     if branding_df.empty or "team" not in branding_df.columns or "logo_file" not in branding_df.columns:
@@ -454,11 +734,15 @@ def render_small_efficiency_map(df):
     ax.axvline(off_mid, linestyle="--", linewidth=1, zorder=3)
     ax.axhline(def_mid, linestyle="--", linewidth=1, zorder=3)
 
-    top_logo_df = chart_df.sort_values("Overall_Rating", ascending=False).head(6) if "Overall_Rating" in chart_df.columns else chart_df.head(0)
+    top_logo_df = (
+        chart_df.sort_values("Overall_Rating", ascending=False).head(10)
+        if "Overall_Rating" in chart_df.columns
+        else chart_df.head(0)
+    )
     for _, row in top_logo_df.iterrows():
         logo_path = get_team_logo(row.get("Team", ""))
         if logo_path:
-            add_logo_to_chart(ax, row["off_eff"], row["def_eff"], logo_path, zoom=0.035)
+            add_logo_to_chart(ax, row["off_eff"], row["def_eff"], logo_path, zoom=0.065)
 
     ax.text(x_min + x_pad * 0.4, y_min + y_pad * 0.7, "Strong Defense\nWeak Offense", fontsize=8, color="#d7c60b", va="top")
     ax.text(x_max - x_pad * 0.4, y_min + y_pad * 0.7, "Strong Offense\nStrong Defense", fontsize=8, color="#047857", ha="right", va="top")
@@ -473,8 +757,16 @@ def render_small_efficiency_map(df):
     st.pyplot(fig, use_container_width=True)
 
 
-def render_full_efficiency_map(df):
-    if df.empty:
+def render_clean_efficiency_map(df):
+    """Clean, product-style efficiency map used on dashboard/rankings pages.
+
+    This version is intentionally simple:
+    - quiet dots for the full D1 field
+    - same-size logos for top teams only
+    - no outline rings, no legend, no strength-of-schedule bubbles
+    - larger plot area so it fills the card cleanly
+    """
+    if df.empty or not {"off_eff", "def_eff"}.issubset(df.columns):
         st.info("Efficiency map unavailable.")
         return
 
@@ -483,84 +775,129 @@ def render_full_efficiency_map(df):
     chart_df["def_eff"] = pd.to_numeric(chart_df["def_eff"], errors="coerce")
     chart_df = chart_df.dropna(subset=["off_eff", "def_eff"])
 
-    fig, ax = plt.subplots(figsize=(12, 8))
+    if chart_df.empty:
+        st.info("Efficiency map unavailable.")
+        return
+
+    fig, ax = plt.subplots(figsize=(8.0, 5.65), dpi=125)
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
 
     x_min, x_max = chart_df["off_eff"].min(), chart_df["off_eff"].max()
     y_min, y_max = chart_df["def_eff"].min(), chart_df["def_eff"].max()
-    x_pad = max((x_max - x_min) * 0.07, 1)
-    y_pad = max((y_max - y_min) * 0.07, 1)
+
+    x_pad = max((x_max - x_min) * 0.09, 1.5)
+    y_pad = max((y_max - y_min) * 0.09, 1.5)
+
     x_min, x_max = x_min - x_pad, x_max + x_pad
     y_min, y_max = y_min - y_pad, y_max + y_pad
 
-    avg_off = chart_df["off_eff"].median()
-    avg_def = chart_df["def_eff"].median()
+    off_mid = chart_df["off_eff"].median()
+    def_mid = chart_df["def_eff"].median()
 
-    quadrants = [
-        (x_min, y_min, avg_off - x_min, avg_def - y_min, "#eaf2ff"),
-        (avg_off, y_min, x_max - avg_off, avg_def - y_min, "#e9f7ef"),
-        (x_min, avg_def, avg_off - x_min, y_max - avg_def, "#fdeeee"),
-        (avg_off, avg_def, x_max - avg_off, y_max - avg_def, "#fff6df"),
+    # Lower defensive efficiency is better, so the y-axis is inverted below.
+    quadrant_specs = [
+        (x_min, y_min, off_mid - x_min, def_mid - y_min, "#f8f9e8"),
+        (off_mid, y_min, x_max - off_mid, def_mid - y_min, "#eaf7f0"),
+        (x_min, def_mid, off_mid - x_min, y_max - def_mid, "#fdeeee"),
+        (off_mid, def_mid, x_max - off_mid, y_max - def_mid, "#fff5df"),
     ]
 
-    for x, y, w, h, color in quadrants:
-        ax.add_patch(Rectangle((x, y), w, h, facecolor=color, edgecolor="none", zorder=0))
+    for x, y, w, h, color in quadrant_specs:
+        ax.add_patch(
+            Rectangle(
+                (x, y),
+                w,
+                h,
+                facecolor=color,
+                edgecolor="none",
+                alpha=0.58,
+                zorder=0,
+            )
+        )
 
-    ax.text(x_min + x_pad * 0.5, y_min + y_pad * 0.8, "Strong Defense\nWeak Offense", fontsize=10, color="#0b5ed7", va="top")
-    ax.text(x_max - x_pad * 0.5, y_min + y_pad * 0.8, "Strong Offense\nStrong Defense", fontsize=10, color="#047857", ha="right", va="top")
-    ax.text(x_min + x_pad * 0.5, y_max - y_pad * 0.8, "Weak Offense\nWeak Defense", fontsize=10, color="#b91c1c", va="bottom")
-    ax.text(x_max - x_pad * 0.5, y_max - y_pad * 0.8, "Strong Offense\nWeak Defense", fontsize=10, color="#92400e", ha="right", va="bottom")
+    ax.scatter(
+        chart_df["off_eff"],
+        chart_df["def_eff"],
+        s=8,
+        alpha=0.20,
+        color="#1f8ae0",
+        linewidths=0,
+        zorder=2,
+    )
 
-    top_teams = chart_df.sort_values("Overall_Rating", ascending=False).head(100)
+    if "Overall_Rating" in chart_df.columns:
+        top_logo_df = chart_df.sort_values("Overall_Rating", ascending=False).head(10)
+    else:
+        top_logo_df = chart_df.head(0)
 
-    for _, row in top_teams.iterrows():
-        team_name = row["Team"]
-        x = row.get("off_eff", None)
-        y = row.get("def_eff", None)
-        sos = row.get("SOS_Rating", 1)
+    for _, row in top_logo_df.iterrows():
+        logo_path = get_team_logo(row.get("Team", ""))
+        if logo_path:
+            add_logo_to_chart(ax, row["off_eff"], row["def_eff"], logo_path, zoom=0.046)
 
-        if pd.notna(x) and pd.notna(y):
-            logo_path = get_team_logo(team_name)
-            zoom_scale = max(0.018, min(0.075, 0.018 + (float(sos) * 0.004)))
-            if logo_path:
-                add_logo_to_chart(ax, x, y, logo_path, zoom=zoom_scale)
-            else:
-                ax.scatter(x, y, s=max(10, float(sos) * 8), alpha=0.35)
+    ax.axvline(off_mid, linestyle="--", linewidth=0.9, color="#3b82f6", alpha=0.65, zorder=3)
+    ax.axhline(def_mid, linestyle="--", linewidth=0.9, color="#3b82f6", alpha=0.65, zorder=3)
 
-    rest = chart_df[~chart_df["Team"].isin(top_teams["Team"])].copy()
-    ax.scatter(rest["off_eff"], rest["def_eff"], s=10, alpha=0.15)
-
-    ax.axvline(avg_off, linestyle="--", linewidth=1)
-    ax.axhline(avg_def, linestyle="--", linewidth=1)
-
-    off_threshold = chart_df["off_eff"].quantile(0.90)
-    def_threshold = chart_df["def_eff"].quantile(0.10)
-
-    elite_offense = chart_df[(chart_df["off_eff"] >= off_threshold) & (chart_df["Tournament_Rank"] <= 100)]
-    elite_defense = chart_df[(chart_df["def_eff"] <= def_threshold) & (chart_df["Tournament_Rank"] <= 100)]
-    elite_both = chart_df[
-        (chart_df["off_eff"] >= off_threshold)
-        & (chart_df["def_eff"] <= def_threshold)
-        & (chart_df["Tournament_Rank"] <= 100)
-    ]
-
-    elite_offense_only = elite_offense[~elite_offense["Team"].isin(elite_both["Team"])]
-    elite_defense_only = elite_defense[~elite_defense["Team"].isin(elite_both["Team"])]
-
-    ax.scatter(elite_defense_only["off_eff"], elite_defense_only["def_eff"], s=850, facecolors="none", edgecolors="blue", linewidths=2, alpha=0.9)
-    ax.scatter(elite_offense_only["off_eff"], elite_offense_only["def_eff"], s=850, facecolors="none", edgecolors="green", linewidths=2, alpha=0.9)
-    ax.scatter(elite_both["off_eff"], elite_both["def_eff"], s=1000, facecolors="none", edgecolors="gold", linewidths=3, alpha=1)
-
-    ax.scatter([], [], edgecolors="green", facecolors="none", s=300, linewidths=2, label="Top 10% Offense")
-    ax.scatter([], [], edgecolors="blue", facecolors="none", s=300, linewidths=2, label="Top 10% Defense")
-    ax.scatter([], [], edgecolors="gold", facecolors="none", s=300, linewidths=3, label="Elite Both")
-    ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1))
+    label_kwargs = {"fontsize": 7.0, "fontweight": "600"}
+    ax.text(
+        x_min + x_pad * 0.55,
+        y_min + y_pad * 0.72,
+        "Strong Defense\nWeak Offense",
+        color="#4d7c0f",
+        va="top",
+        **label_kwargs,
+    )
+    ax.text(
+        x_max - x_pad * 0.55,
+        y_min + y_pad * 0.72,
+        "Strong Defense\nStrong Offense",
+        color="#047857",
+        ha="right",
+        va="top",
+        **label_kwargs,
+    )
+    ax.text(
+        x_min + x_pad * 0.55,
+        y_max - y_pad * 0.72,
+        "Weak Defense\nWeak Offense",
+        color="#b91c1c",
+        va="bottom",
+        **label_kwargs,
+    )
+    ax.text(
+        x_max - x_pad * 0.55,
+        y_max - y_pad * 0.72,
+        "Weak Defense\nStrong Offense",
+        color="#92400e",
+        ha="right",
+        va="bottom",
+        **label_kwargs,
+    )
 
     ax.set_xlim(x_min, x_max)
     ax.set_ylim(y_max, y_min)
-    ax.set_xlabel("Offensive Efficiency")
-    ax.set_ylabel("Defensive Efficiency")
-    ax.set_title("Team Efficiency Map — Size = Strength of Schedule")
+    ax.set_xlabel("Offensive Efficiency", fontsize=8)
+    ax.set_ylabel("Defensive Efficiency", fontsize=8)
+    ax.set_title("Efficiency Landscape", fontsize=10, pad=7)
+
+    ax.grid(False)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_alpha(0.30)
+    ax.spines["bottom"].set_alpha(0.30)
+    ax.tick_params(axis="both", labelsize=7)
+
+    # Tight margins keep the plot from looking tiny inside its card.
+    fig.subplots_adjust(left=0.085, right=0.985, top=0.90, bottom=0.125)
+
     st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
+
+
+def render_full_efficiency_map(df):
+    """Use the same clean visual language for the full map so it never falls back to the old cluttered version."""
+    render_clean_efficiency_map(df)
 
 
 # -----------------------------
@@ -569,6 +906,7 @@ def render_full_efficiency_map(df):
 with st.sidebar:
     if SIDEBAR_LOGO_PATH.exists():
         st.image(str(SIDEBAR_LOGO_PATH), width=155)
+    
     st.markdown("---")
 
     page = st.radio(
@@ -583,9 +921,23 @@ with st.sidebar:
             "Team Comparison",
             "Model Accuracy",
         ],
+        key="main_navigation",
     )
 
+    
+navigation_pages = [
+    "Home",
+    "Ratings & Rankings",
+    "Matchup Predictor",
+    "Daily Slate",
+    "Teams",
+    "Bubble Board",
+    "Team Comparison",
+    "Model Accuracy",
+]
 
+if "selected_page" not in st.session_state:
+    st.session_state.selected_page = "Home"
 @st.cache_data
 def fetch_today_slate(test_mode=False):
     if test_mode:
@@ -648,7 +1000,7 @@ if page == "Home":
         top_team = team_stats_df.sort_values("Overall_Rating", ascending=False).iloc[0]["Team"] if "Overall_Rating" in team_stats_df.columns else "N/A"
         top_dae = team_stats_df.sort_values("Difficulty_Adjusted_Effectiveness", ascending=False).iloc[0]["Team"] if "Difficulty_Adjusted_Effectiveness" in team_stats_df.columns else "N/A"
         bubble_count = team_stats_df["bubble_status"].astype(str).str.contains("Bubble", case=False, na=False).sum() if "bubble_status" in team_stats_df.columns else 0
-        projected_field = int((team_stats_df["Tournament_Rank"] <= 68).sum()) if "Tournament_Rank" in team_stats_df.columns else 0
+        projected_field = int((team_stats_df["Tournament_Rank"] <= 76).sum()) if "Tournament_Rank" in team_stats_df.columns else 0
     else:
         teams_count, top_team, top_dae, bubble_count, projected_field = 0, "N/A", "N/A", 0, 0
 
@@ -681,38 +1033,99 @@ if page == "Home":
             render_small_efficiency_map(team_rankings_df)
 
         lower_left, lower_right = st.columns([1, 1])
+
+        
         with lower_left:
             section_label("Today's Slate")
+
             slate = fetch_today_slate()
+
             if slate.empty:
-                st.info("No live games found today.")
+                st.info("No games scheduled today.")
+
             else:
-                valid_teams = set(team_stats_df["Team"].dropna()) if not team_stats_df.empty else set()
-                rows = []
-                for _, game in slate.iterrows():
+                valid_teams = (
+                    set(team_stats_df["Team"].dropna())
+                    if not team_stats_df.empty
+                    else set()
+                )
+
+                games_shown = 0
+
+                for game_idx, (_, game) in enumerate(
+                    slate.iterrows()
+                ):
                     home = game.get("home_team")
                     away = game.get("away_team")
-                    if home not in valid_teams or away not in valid_teams:
+
+                    if (
+                        home not in valid_teams
+                        or away not in valid_teams
+                    ):
                         continue
-                    try:
-                        result = simulate_matchup(
-                            team_stats_df=team_stats_df,
-                            team1_name=home,
-                            team2_name=away,
-                            site_value="neutral" if game.get("neutral_site") else "team1_home",
-                            n_sims=500,
+
+                    neutral = game.get(
+                        "neutral_site", False
+                    )
+
+                    if pd.isna(neutral):
+                        neutral = False
+                    elif isinstance(neutral, str):
+                        neutral = (
+                            neutral.strip().lower()
+                            in ("true", "1", "yes")
                         )
-                        rows.append({
-                            "Matchup": f"{away} at {home}",
-                            "Line": f"{result.get('favorite', 'N/A')} {result.get('spread', 'N/A')}",
-                            "Total": result.get("total", "N/A"),
-                        })
-                    except Exception:
-                        continue
-                if rows:
-                    st.dataframe(pd.DataFrame(rows).head(6), use_container_width=True, hide_index=True)
-                else:
-                    st.info("No D1 matchups available for projection today.")
+                    else:
+                        neutral = bool(neutral)
+
+                    if neutral:
+                        matchup = f"{away} vs. {home}"
+                    else:
+                        matchup = f"{away} @ {home}"
+
+                    # Preserve the original tipoff time
+                    game_date = game.get("date")
+
+                    if pd.notna(game_date):
+                        tipoff = pd.Timestamp(
+                            game_date
+                        ).tz_convert(
+                            "America/Chicago"
+                        ).strftime("%I:%M %p CT")
+                    else:
+                        tipoff = "TBD"
+
+                    button_label = (
+                        f"{tipoff}  |  {matchup}"
+                    )
+
+                    if st.button(
+                        button_label,
+                        key=f"home_slate_{game_idx}",
+                        use_container_width=True,
+                    ):
+                        st.session_state[
+                            "daily_slate_selected_game"
+                        ] = {
+                            "home_team": home,
+                            "away_team": away,
+                        }
+
+                        st.session_state[
+                            "selected_page"
+                        ] = "Daily Slate"
+
+                        st.rerun()
+
+                    games_shown += 1
+
+                    if games_shown >= 6:
+                        break
+
+                if games_shown == 0:
+                    st.info(
+                        "No D1 matchups available today."
+                    )
 
         with lower_right:
             show_top_table(
@@ -741,7 +1154,7 @@ if page == "Home":
 
 elif page == "Ratings & Rankings":
     st.title("Ratings & Rankings")
-    st.caption("Quick leaders first, full sortable rankings second, and the efficiency map below.")
+    st.caption("Explore team ratings, efficiency metrics, and rankings that power the predictive model.")
 
     if team_rankings_df.empty:
         st.warning("No team rankings found. Run pipeline.py first.")
@@ -756,17 +1169,118 @@ elif page == "Ratings & Rankings":
             else:
                 rankings_source["Difficulty_Adjusted_Effectiveness"] = rankings_source.get("Overall_Rating", 0)
 
-        a, b = st.columns(2)
-        with a:
-            show_top_table("Overall Rating Leaders", rankings_source, "Overall_Rating", ["Team", "Overall_Rating", "Power_Rating", "off_eff", "def_eff"], False, 10)
-        with b:
-            show_top_table("Difficulty-Adjusted Leaders", rankings_source, "Difficulty_Adjusted_Effectiveness", ["Team", "Difficulty_Adjusted_Effectiveness", "SOS_Rating", "Resume_Score", "Tournament_Rank"], False, 10)
+        # --- Summary cards ---
+        teams_count = len(rankings_source)
+        top_overall_row = rankings_source.sort_values("Overall_Rating", ascending=False).iloc[0] if "Overall_Rating" in rankings_source.columns else None
+        top_off_row = rankings_source.sort_values("off_eff", ascending=False).iloc[0] if "off_eff" in rankings_source.columns else None
+        top_def_row = rankings_source.sort_values("def_eff", ascending=True).iloc[0] if "def_eff" in rankings_source.columns else None
+        top_dae_row = rankings_source.sort_values("Difficulty_Adjusted_Effectiveness", ascending=False).iloc[0]
 
-        c, d = st.columns(2)
-        with c:
-            show_top_table("Elite Offenses", rankings_source, "off_eff", ["Team", "off_eff", "Overall_Rating", "possessions"], False, 10)
-        with d:
-            show_top_table("Elite Defenses", rankings_source, "def_eff", ["Team", "def_eff", "Overall_Rating", "SOS_Rating"], True, 10)
+        card1, card2, card3, card4 = st.columns(4)
+        with card1:
+            render_metric_card("Teams Tracked", f"{teams_count:,}", "D1 teams")
+        with card2:
+            render_metric_card(
+                "Top Overall Rating",
+                top_overall_row["Team"] if top_overall_row is not None else "N/A",
+                f"{safe_metric_value(top_overall_row, 'Overall_Rating') if top_overall_row is not None else 'N/A'} rating",
+            )
+        with card3:
+            render_metric_card(
+                "Top Offensive Rating",
+                top_off_row["Team"] if top_off_row is not None else "N/A",
+                f"{safe_metric_value(top_off_row, 'off_eff') if top_off_row is not None else 'N/A'} off eff",
+            )
+        with card4:
+            render_metric_card(
+                "Top Defensive Rating",
+                top_def_row["Team"] if top_def_row is not None else "N/A",
+                f"{safe_metric_value(top_def_row, 'def_eff') if top_def_row is not None else 'N/A'} def eff",
+            )
+
+        st.markdown("")
+
+        # --- Main ratings module: one rankings card + one clean map card ---
+        left, right = st.columns([1.03, 1.07])
+
+        with left:
+            tab_overall, tab_offense, tab_defense, tab_dae = st.tabs([
+                "Top 10 Overall",
+                "Top Offensive",
+                "Top Defensive",
+                "Difficulty-Adjusted",
+            ])
+
+            with tab_overall:
+                render_logo_rankings_table("Top 10 Overall", rankings_source, "Overall_Rating", False, 10, "Overall_Rating", "Net")
+                st.markdown("<div class='fe-view-link'>View full rankings →</div>", unsafe_allow_html=True)
+
+            with tab_offense:
+                render_logo_rankings_table("Top Offensive", rankings_source, "off_eff", False, 10, "Overall_Rating", "Net")
+                st.markdown("<div class='fe-view-link'>View full offense rankings →</div>", unsafe_allow_html=True)
+
+            with tab_defense:
+                render_logo_rankings_table("Top Defensive", rankings_source, "def_eff", True, 10, "Overall_Rating", "Net")
+                st.markdown("<div class='fe-view-link'>View full defense rankings →</div>", unsafe_allow_html=True)
+
+            with tab_dae:
+                render_logo_rankings_table("Difficulty-Adjusted", rankings_source, "Difficulty_Adjusted_Effectiveness", False, 10, "Difficulty_Adjusted_Effectiveness", "DAE")
+                st.markdown("<div class='fe-view-link'>View difficulty-adjusted rankings →</div>", unsafe_allow_html=True)
+
+        with right:
+            section_label("Efficiency Landscape")
+            with st.container(border=True):
+                render_clean_efficiency_map(rankings_source)
+
+        st.markdown("---")
+
+        # --- Supporting analytics ---
+        support_left, support_mid, support_right = st.columns([1, 1.15, 1])
+
+        with support_left:
+            section_label("Rating Distribution")
+            if "Overall_Rating" in rankings_source.columns:
+                with st.container(border=True):
+                    fig, ax = plt.subplots(figsize=(4.8, 2.55), dpi=140)
+                    values = pd.to_numeric(rankings_source["Overall_Rating"], errors="coerce").dropna()
+                    ax.hist(values, bins=20)
+                    ax.set_xlabel("Overall Rating", fontsize=8)
+                    ax.set_ylabel("Teams", fontsize=8)
+                    ax.set_title("Overall Rating Distribution", fontsize=9)
+                    ax.tick_params(axis="both", labelsize=7)
+                    ax.spines["top"].set_visible(False)
+                    ax.spines["right"].set_visible(False)
+                    fig.tight_layout(pad=0.7)
+                    st.pyplot(fig, use_container_width=True)
+                    plt.close(fig)
+            else:
+                st.info("Rating distribution unavailable.")
+
+        with support_mid:
+            section_label("Key Insights")
+            insight_lines = []
+            if top_overall_row is not None:
+                insight_lines.append(f"<b>{top_overall_row['Team']}</b> leads the overall model rating.")
+            if top_off_row is not None:
+                insight_lines.append(f"<b>{top_off_row['Team']}</b> owns the strongest offensive profile.")
+            if top_def_row is not None:
+                insight_lines.append(f"<b>{top_def_row['Team']}</b> owns the strongest defensive profile.")
+            if top_dae_row is not None:
+                insight_lines.append(f"<b>{top_dae_row['Team']}</b> leads difficulty-adjusted effectiveness.")
+            render_insight_list_card(insight_lines)
+
+        with support_right:
+            section_label("Top Performers")
+            performer_rows = []
+            if top_overall_row is not None:
+                performer_rows.append({"Team": top_overall_row["Team"], "Value": safe_metric_value(top_overall_row, "Overall_Rating"), "Category": "Overall"})
+            if top_off_row is not None:
+                performer_rows.append({"Team": top_off_row["Team"], "Value": safe_metric_value(top_off_row, "off_eff"), "Category": "Offense"})
+            if top_def_row is not None:
+                performer_rows.append({"Team": top_def_row["Team"], "Value": safe_metric_value(top_def_row, "def_eff"), "Category": "Defense"})
+            if top_dae_row is not None:
+                performer_rows.append({"Team": top_dae_row["Team"], "Value": safe_metric_value(top_dae_row, "Difficulty_Adjusted_Effectiveness"), "Category": "Difficulty Adj."})
+            render_top_performers_card(performer_rows)
 
         st.markdown("---")
         st.markdown("### Full Rankings Table")
@@ -802,10 +1316,6 @@ elif page == "Ratings & Rankings":
         show_cols = [c for c in ["Rank"] + show_cols if c in rankings_df.columns]
         st.dataframe(clean_numeric(rankings_df[show_cols]), use_container_width=True, hide_index=True)
 
-        st.markdown("---")
-        st.markdown("### Efficiency Map")
-        render_full_efficiency_map(rankings_source)
-        
 elif page == "Matchup Predictor":
     st.title("Matchup Predictor")
     st.caption("Clean matchup projection with score, line, total, confidence, style, and detailed tabs.")
@@ -898,6 +1408,64 @@ elif page == "Matchup Predictor":
                         st.metric(f"{result['team1']} Win Probability", f"{result['win_prob1']:.1%}")
                     with w2:
                         st.metric(f"{result['team2']} Win Probability", f"{result['win_prob2']:.1%}")
+
+                    # Team-colored win probability bar
+                    import html
+
+                    def get_probability_color(team_name, fallback):
+                        if branding_df.empty:
+                            return fallback
+
+                        matches = branding_df[
+                            branding_df["team"].astype(str).str.strip().str.casefold()
+                            == str(team_name).strip().casefold()
+                        ]
+
+                        if matches.empty:
+                            return fallback
+
+                        value = matches.iloc[0].get("primary_color")
+                        if pd.isna(value):
+                            return fallback
+
+                        value = str(value).strip().lstrip("#")
+                        if not re.fullmatch(r"[0-9a-fA-F]{6}", value):
+                            return fallback
+
+                        return "#" + value.upper()
+
+                    color1 = get_probability_color(result["team1"], "#2563EB")
+                    color2 = get_probability_color(result["team2"], "#DC2626")
+
+                    prob1 = max(0.0, min(1.0, float(result["win_prob1"])))
+                    prob2 = max(0.0, min(1.0, float(result["win_prob2"])))
+                    total_prob = prob1 + prob2
+
+                    if total_prob > 0:
+                        prob1 /= total_prob
+                        prob2 /= total_prob
+
+                    team1_label = html.escape(str(result["team1"]))
+                    team2_label = html.escape(str(result["team2"]))
+
+                    st.markdown(
+                        f"""
+                        <div style="display:flex;justify-content:space-between;
+                                    font-size:13px;font-weight:600;margin:12px 0 6px;">
+                            <span>{team1_label}</span>
+                            <span>{team2_label}</span>
+                        </div>
+                        <div style="display:flex;width:100%;height:22px;
+                                    overflow:hidden;border-radius:7px;
+                                    background:#e5e7eb;">
+                            <div style="width:{prob1 * 100:.2f}%;
+                                        background:{color1};"></div>
+                            <div style="width:{prob2 * 100:.2f}%;
+                                        background:{color2};"></div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
                     tabs = st.tabs(["Overview", "Matchup Factors", "Projected Box Score", "Team Profiles"])
 
@@ -996,6 +1564,671 @@ elif page == "Matchup Predictor":
 
                 except Exception as e:
                     st.error(f"Prediction error: {e}")
+
+
+elif page == "Daily Slate":
+    from daily_schedule import get_daily_schedule
+    from datetime import date, timedelta
+    from zoneinfo import ZoneInfo
+
+    # --------------------------------------------------
+    # HELPERS
+    # --------------------------------------------------
+    def slate_format_number(value, decimals=1):
+        try:
+            if value is None or pd.isna(value):
+                return "N/A"
+            return f"{float(value):.{decimals}f}"
+        except (ValueError, TypeError):
+            return str(value)
+
+    def slate_tipoff(value):
+        try:
+            timestamp = pd.to_datetime(value, utc=True)
+            return timestamp.tz_convert(
+                "America/Chicago"
+            ).strftime("%I:%M %p CT")
+        except (ValueError, TypeError):
+            return "TBD"
+
+    def slate_matchup(game):
+        separator = "vs" if game["neutral"] else "@"
+        return f"{game['away']} {separator} {game['home']}"
+
+    def slate_site(game):
+        return (
+            "Neutral"
+            if bool(game.get("neutral_site", False))
+            else "Home"
+        )
+
+    def slate_team_profile(team_name):
+        matches = team_stats_df[
+            team_stats_df["Team"] == team_name
+        ]
+        if matches.empty:
+            return None
+        return matches.iloc[0]
+
+    def slate_profile_comparison(home, away):
+        home_row = slate_team_profile(home)
+        away_row = slate_team_profile(away)
+
+        if home_row is None or away_row is None:
+            st.info("Team profile data is unavailable.")
+            return
+
+        metrics = [
+            ("Overall Rating", "Overall_Rating", False),
+            ("Offensive Efficiency", "off_eff", False),
+            ("Defensive Efficiency", "def_eff", True),
+            ("Tempo", "possessions", None),
+            ("Strength of Schedule", "SOS_Rating", False),
+            (
+                "Difficulty-Adjusted",
+                "Difficulty_Adjusted_Effectiveness",
+                False,
+            ),
+        ]
+
+        comparison = []
+
+        for label, column, lower_better in metrics:
+            if (
+                column not in home_row.index
+                or column not in away_row.index
+            ):
+                continue
+
+            try:
+                home_value = float(home_row[column])
+                away_value = float(away_row[column])
+            except (ValueError, TypeError):
+                continue
+
+            if pd.isna(home_value) or pd.isna(away_value):
+                continue
+
+            if lower_better is None:
+                edge = "Style metric"
+            elif home_value == away_value:
+                edge = "Even"
+            elif lower_better:
+                edge = (
+                    home if home_value < away_value
+                    else away
+                )
+            else:
+                edge = (
+                    home if home_value > away_value
+                    else away
+                )
+
+            comparison.append({
+                "Metric": label,
+                away: round(away_value, 2),
+                home: round(home_value, 2),
+                "Advantage": edge,
+            })
+
+        if comparison:
+            st.dataframe(
+                pd.DataFrame(comparison),
+                hide_index=True,
+                use_container_width=True,
+            )
+        else:
+            st.info("No comparable team metrics available.")
+
+    # --------------------------------------------------
+    # DATE NAVIGATION
+    # --------------------------------------------------
+    today_ct = datetime.now(
+        ZoneInfo("America/Chicago")
+    ).date()
+
+    if "daily_slate_selected_date" not in st.session_state:
+        st.session_state["daily_slate_selected_date"] = today_ct
+
+    st.markdown("### Game Schedule")
+
+    date_left, date_middle, date_right = st.columns(
+        [1, 2, 1]
+    )
+
+    with date_left:
+        if st.button(
+            "Previous Day",
+            use_container_width=True,
+            key="slate_previous",
+        ):
+            st.session_state["daily_slate_selected_date"] -= (
+                timedelta(days=1)
+            )
+
+    with date_right:
+        if st.button(
+            "Next Day",
+            use_container_width=True,
+            key="slate_next",
+        ):
+            st.session_state["daily_slate_selected_date"] += (
+                timedelta(days=1)
+            )
+
+    with date_middle:
+        st.date_input(
+            "Select Game Date",
+            key="daily_slate_selected_date",
+        )
+
+    selected_date = st.session_state[
+        "daily_slate_selected_date"
+    ]
+
+    # --------------------------------------------------
+    # FETCH SCHEDULE
+    # --------------------------------------------------
+    @st.cache_data(ttl=300, show_spinner=False)
+    def load_daily_slate(game_date):
+        return get_daily_schedule(game_date)
+
+    try:
+        with st.spinner("Loading daily games..."):
+            slate = load_daily_slate(selected_date)
+        schedule_error = None
+    except Exception as e:
+        slate = pd.DataFrame()
+        schedule_error = str(e)
+
+    if schedule_error:
+        st.error(
+            f"Unable to retrieve the schedule: {schedule_error}"
+        )
+
+    elif slate.empty:
+        st.info("No games scheduled for this date.")
+
+    else:
+        # --------------------------------------------------
+        # TEAM ELIGIBILITY
+        # --------------------------------------------------
+        valid_teams = (
+            set(team_stats_df["Team"].dropna())
+            if not team_stats_df.empty
+            else set()
+        )
+
+        slate = slate.copy()
+
+        slate["model_eligible"] = (
+            slate["home_team"].isin(valid_teams)
+            & slate["away_team"].isin(valid_teams)
+        )
+
+        # --------------------------------------------------
+        # SUMMARY METRICS
+        # --------------------------------------------------
+        total_games = len(slate)
+        d1_games = int(slate["model_eligible"].sum())
+        other_games = total_games - d1_games
+
+        neutral_games = int(
+            slate["neutral_site"].fillna(False).sum()
+        )
+
+        m1, m2, m3, m4 = st.columns(4)
+
+        with m1:
+            st.metric("Total Games", total_games)
+
+        with m2:
+            st.metric("Model-Eligible Matchups", d1_games)
+
+        with m3:
+            st.metric("Without Model Data", other_games)
+
+        with m4:
+            st.metric("Neutral-Site Games", neutral_games)
+
+        # --------------------------------------------------
+        # FILTERS
+        # --------------------------------------------------
+        st.markdown("### Browse Matchups")
+
+        filter_left, filter_middle, filter_right = (
+            st.columns([2, 1.2, 1.2])
+        )
+
+        all_teams = sorted(
+            set(slate["home_team"].dropna())
+            | set(slate["away_team"].dropna())
+        )
+
+        with filter_left:
+            selected_team = st.selectbox(
+                "Filter by Team",
+                ["All Teams"] + all_teams,
+                key="slate_team_filter",
+            )
+
+        with filter_middle:
+            status_filter = st.selectbox(
+                "Game Status",
+                ["All Games", "Scheduled", "Live", "Final"],
+                key="slate_status_filter",
+            )
+
+        with filter_right:
+            site_filter = st.selectbox(
+                "Game Site",
+                ["All Sites", "Neutral", "Home"],
+                key="slate_site_filter",
+            )
+
+        filtered = slate.copy()
+
+        if selected_team != "All Teams":
+            filtered = filtered[
+                (filtered["home_team"] == selected_team)
+                | (filtered["away_team"] == selected_team)
+            ]
+
+        if site_filter == "Neutral":
+            filtered = filtered[
+                filtered["neutral_site"] == True
+            ]
+        elif site_filter == "Home":
+            filtered = filtered[
+                filtered["neutral_site"] == False
+            ]
+
+        if status_filter != "All Games":
+            status_names = filtered["status"].fillna(
+                ""
+            ).astype(str).str.upper()
+
+            if status_filter == "Scheduled":
+                filtered = filtered[
+                    status_names.str.contains(
+                        "SCHEDULED|PRE",
+                        regex=True,
+                    )
+                ]
+            elif status_filter == "Live":
+                filtered = filtered[
+                    status_names.str.contains(
+                        "IN_PROGRESS|INPROGRESS|HALFTIME",
+                        regex=True,
+                    )
+                ]
+            elif status_filter == "Final":
+                filtered = filtered[
+                    status_names.str.contains("FINAL")
+                ]
+
+        # --------------------------------------------------
+        # GENERATE PROJECTIONS
+        # --------------------------------------------------
+        projected_games = []
+        other_matchups = []
+
+        for _, game in filtered.iterrows():
+            home = game["home_team"]
+            away = game["away_team"]
+            neutral = bool(game["neutral_site"])
+
+            game_record = {
+                "game_id": str(game["game_id"]),
+                "home": home,
+                "away": away,
+                "tipoff": slate_tipoff(game["date"]),
+                "site": slate_site(game),
+                "status": game.get(
+                    "status_detail", "Scheduled"
+                ),
+                "neutral": neutral,
+                "away_score": game.get("away_score"),
+                "home_score": game.get("home_score"),
+                "result": None,
+                "error": None,
+            }
+
+            if not game["model_eligible"]:
+                other_matchups.append(game_record)
+                continue
+
+            try:
+                result = simulate_matchup(
+                    team_stats_df=team_stats_df,
+                    team1_name=home,
+                    team2_name=away,
+                    site_value=(
+                        "neutral"
+                        if neutral
+                        else "team1_home"
+                    ),
+                    n_sims=1000,
+                )
+
+                game_record["result"] = result
+
+            except Exception as e:
+                game_record["error"] = str(e)
+
+            projected_games.append(game_record)
+
+        # --------------------------------------------------
+        # D1 MATCHUP OVERVIEW
+        # --------------------------------------------------
+        st.markdown("### Game Projections")
+
+        st.caption(
+            "Select a matchup below for expanded "
+            "FronEdge analysis."
+        )
+
+        if not projected_games:
+            st.info(
+                "No model-eligible matchups match these filters."
+            )
+
+        else:
+            overview_rows = []
+
+            for game in projected_games:
+                result = game["result"]
+
+                if result is not None:
+                    projected_score = (
+                        f"{slate_format_number(result.get('proj_score2'))}"
+                        " - "
+                        f"{slate_format_number(result.get('proj_score1'))}"
+                    )
+
+                    favorite = result.get(
+                        "favorite", "N/A"
+                    )
+                    spread = result.get("spread", "N/A")
+                    total = result.get("total", "N/A")
+
+                else:
+                    projected_score = "N/A"
+                    favorite = "N/A"
+                    spread = "N/A"
+                    total = "N/A"
+
+                overview_rows.append({
+                    "Tipoff": game["tipoff"],
+                    "Matchup": slate_matchup(game),
+                    "Site": game["site"],
+                    "Status": game["status"],
+                    "Projected Score (Away-Home)": (
+                        projected_score
+                    ),
+                    "Favorite": favorite,
+                })
+
+            st.dataframe(
+                pd.DataFrame(overview_rows),
+                hide_index=True,
+                use_container_width=True,
+            )
+
+            # --------------------------------------------------
+            # EXPANDABLE MATCHUP ANALYSIS
+            # --------------------------------------------------
+            st.markdown("### Matchup Analysis")
+
+            for game in projected_games:
+                home = game["home"]
+                away = game["away"]
+                result = game["result"]
+
+                heading = (
+                    f"{game['tipoff']} | "
+                    f"{slate_matchup(game)}"
+                )
+
+                with st.expander(heading):
+                    st.caption(
+                        f"{game['site']} Site | "
+                        f"{game['status']}"
+                    )
+
+                    if result is None:
+                        st.warning(
+                            "A projection could not be generated "
+                            "for this matchup."
+                        )
+                        if game["error"]:
+                            st.caption(
+                                f"Model error: {game['error']}"
+                            )
+                        continue
+
+                    # --------------------------------------
+                    # TEAM HEADER
+                    # --------------------------------------
+                    left, center, right = st.columns(
+                        [2, 1, 2]
+                    )
+
+                    with left:
+                        away_logo = get_team_logo(away)
+                        if away_logo:
+                            st.image(
+                                str(away_logo),
+                                width=75,
+                            )
+                        st.markdown(f"**{away}**")
+                        st.metric(
+                            "Projected Points",
+                            slate_format_number(
+                                result.get("proj_score2")
+                            ),
+                        )
+
+                    with center:
+                        st.markdown("### VS")
+                        st.caption(game["site"])
+
+                    with right:
+                        home_logo = get_team_logo(home)
+                        if home_logo:
+                            st.image(
+                                str(home_logo),
+                                width=75,
+                            )
+                        st.markdown(f"**{home}**")
+                        st.metric(
+                            "Projected Points",
+                            slate_format_number(
+                                result.get("proj_score1")
+                            ),
+                        )
+
+                    # --------------------------------------
+                    # PROJECTION METRICS
+                    # --------------------------------------
+                    st.markdown("#### Projection Summary")
+
+                    p1, p2, p3 = st.columns(3)
+
+                    with p1:
+                        st.metric(
+                            "Favorite",
+                            str(
+                                result.get(
+                                    "favorite", "N/A"
+                                )
+                            ),
+                        )
+
+                    with p2:
+                        st.metric(
+                            "Projected Spread",
+                            slate_format_number(
+                                result.get("spread")
+                            ),
+                        )
+
+                    with p3:
+                        st.metric(
+                            "Projected Total",
+                            slate_format_number(
+                                result.get("total")
+                            ),
+                        )
+
+                    # --------------------------------------
+                    # WIN PROBABILITIES
+                    # --------------------------------------
+                    st.markdown("#### Win Probability")
+
+                    away_probability = result.get(
+                        "win_prob2"
+                    )
+                    home_probability = result.get(
+                        "win_prob1"
+                    )
+
+                    if (
+                        away_probability is not None
+                        and home_probability is not None
+                    ):
+                        w1, w2 = st.columns(2)
+
+                        with w1:
+                            st.metric(
+                                f"{away} Win Probability",
+                                f"{float(away_probability):.1%}",
+                            )
+
+                        with w2:
+                            st.metric(
+                                f"{home} Win Probability",
+                                f"{float(home_probability):.1%}",
+                            )
+
+                    # --------------------------------------
+                    # ANALYSIS TABS
+                    # --------------------------------------
+                    tab1, tab2, tab3 = st.tabs(
+                        [
+                            "Matchup Factors",
+                            "Projected Box Score",
+                            "Model Insights",
+                        ]
+                    )
+
+                    with tab1:
+                        st.markdown(
+                            "#### Team Statistical Comparison"
+                        )
+                        slate_profile_comparison(
+                            home, away
+                        )
+
+                    with tab2:
+                        st.markdown(
+                            "#### Projected Box Score"
+                        )
+
+                        home_box = result.get(
+                            "box_score_team1", {}
+                        )
+                        away_box = result.get(
+                            "box_score_team2", {}
+                        )
+
+                        box_rows = [
+                            {"Team": away, **away_box},
+                            {"Team": home, **home_box},
+                        ]
+
+                        st.dataframe(
+                            pd.DataFrame(box_rows),
+                            hide_index=True,
+                            use_container_width=True,
+                        )
+
+                    with tab3:
+                        st.markdown(
+                            "#### FronEdge Model Read"
+                        )
+
+                        insight_rows = [
+                            (
+                                "Confidence",
+                                result.get(
+                                    "confidence", "N/A"
+                                ),
+                            ),
+                            (
+                                "Game Style",
+                                result.get(
+                                    "game_style", "N/A"
+                                ),
+                            ),
+                            (
+                                "Volatility",
+                                result.get(
+                                    "volatility_tag", "N/A"
+                                ),
+                            ),
+                            (
+                                "Upset Alert",
+                                result.get(
+                                    "upset_alert", "N/A"
+                                ),
+                            ),
+                        ]
+
+                        for label, value in insight_rows:
+                            st.markdown(
+                                f"**{label}:** {value}"
+                            )
+
+        # --------------------------------------------------
+        # GAMES WITHOUT MODEL PROJECTIONS
+        # --------------------------------------------------
+        if other_matchups:
+            st.markdown("---")
+
+            with st.expander(
+                f"Other Scheduled Matchups "
+                f"({len(other_matchups)})"
+            ):
+                st.caption(
+                    "At least one team is not in the "
+                    "current FronEdge model dataset. "
+                    "These games are shown without projections."
+                )
+
+                other_rows = []
+
+                for game in other_matchups:
+                    other_rows.append({
+                        "Tipoff": game["tipoff"],
+                        "Away": game["away"],
+                        "Home": game["home"],
+                        "Site": game["site"],
+                        "Status": game["status"],
+                    })
+
+                st.dataframe(
+                    pd.DataFrame(other_rows),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+
+        st.markdown("---")
+        st.caption(
+            "FronEdge Metrics projections are model "
+            "estimates, not guaranteed outcomes. "
+            "Game schedule and status data provided by ESPN."
+        )
 
 elif page == "Teams":
     st.title("Teams")
@@ -1184,20 +2417,20 @@ elif page == "Bubble Board":
         locks = bubble_df[bubble_df["tournament_status"].isin(["Lock", "Likely In"])]
         bubble = bubble_df[bubble_df["bubble_status"].astype(str).str.contains("Bubble", case=False, na=False)]
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Projected Field", len(bubble_df[bubble_df["Tournament_Rank"] <= 68]))
+        c1.metric("Projected Field", len(bubble_df[bubble_df["Tournament_Rank"] <= 76]))
         c2.metric("Locks / Likely In", len(locks))
         c3.metric("Bubble Teams", len(bubble))
-        c4.metric("First 10 Out", len(bubble_df[(bubble_df["Tournament_Rank"] > 68) & (bubble_df["Tournament_Rank"] <= 78)]))
+        c4.metric("First 10 Out", len(bubble_df[(bubble_df["Tournament_Rank"] > 76) & (bubble_df["Tournament_Rank"] <= 86)]))
 
         view = st.radio("View", ["Projected Field", "Bubble Watch", "First Four Out", "Next Teams Out", "Full Board"], horizontal=True)
         if view == "Projected Field":
-            display_df = bubble_df[bubble_df["Tournament_Rank"] <= 68].copy()
+            display_df = bubble_df[bubble_df["Tournament_Rank"] <= 76].copy()
         elif view == "Bubble Watch":
-            display_df = bubble_df[(bubble_df["Tournament_Rank"] >= 45) & (bubble_df["Tournament_Rank"] <= 78)].copy()
+            display_df = bubble_df[(bubble_df["Tournament_Rank"] >= 53) & (bubble_df["Tournament_Rank"] <= 86)].copy()
         elif view == "First Four Out":
-            display_df = bubble_df[(bubble_df["Tournament_Rank"] > 68) & (bubble_df["Tournament_Rank"] <= 72)].copy()
+            display_df = bubble_df[(bubble_df["Tournament_Rank"] > 76) & (bubble_df["Tournament_Rank"] <= 80)].copy()
         elif view == "Next Teams Out":
-            display_df = bubble_df[(bubble_df["Tournament_Rank"] > 72) & (bubble_df["Tournament_Rank"] <= 84)].copy()
+            display_df = bubble_df[(bubble_df["Tournament_Rank"] > 81) & (bubble_df["Tournament_Rank"] <= 84)].copy()
         else:
             display_df = bubble_df.copy()
 
@@ -1208,10 +2441,10 @@ elif page == "Bubble Board":
         left, right = st.columns(2)
         with left:
             st.markdown("### Last Four In")
-            st.dataframe(clean_numeric(bubble_df[(bubble_df["Tournament_Rank"] >= 65) & (bubble_df["Tournament_Rank"] <= 68)].rename(columns=rename_cols)), use_container_width=True, hide_index=True)
+            st.dataframe(clean_numeric(bubble_df[(bubble_df["Tournament_Rank"] >= 73) & (bubble_df["Tournament_Rank"] <= 76)].rename(columns=rename_cols)), use_container_width=True, hide_index=True)
         with right:
             st.markdown("### First Four Out")
-            st.dataframe(clean_numeric(bubble_df[(bubble_df["Tournament_Rank"] >= 69) & (bubble_df["Tournament_Rank"] <= 72)].rename(columns=rename_cols)), use_container_width=True, hide_index=True)
+            st.dataframe(clean_numeric(bubble_df[(bubble_df["Tournament_Rank"] >= 77) & (bubble_df["Tournament_Rank"] <= 80)].rename(columns=rename_cols)), use_container_width=True, hide_index=True)
 
 elif page == "Team Comparison":
     st.title("Team Comparison")
@@ -1281,6 +2514,7 @@ elif page == "Model Accuracy":
     else:
 
         df = backtest_results_df.copy()
+        error_col = "spread_error" if "spread_error" in df.columns else "margin_error"
 
         m1, m2, m3, m4 = st.columns(4)
 
@@ -1298,7 +2532,7 @@ elif page == "Model Accuracy":
 
         m3.metric(
             "Avg Spread Error",
-            f"{df['spread_error'].mean():.2f}"
+            f"{df[error_col].mean():.2f}"
         )
 
         m4.metric(
@@ -1320,7 +2554,7 @@ elif page == "Model Accuracy":
 
         c2.metric(
             "Competitive Spread Error",
-            f"{competitive['spread_error'].mean():.2f}"
+            f"{competitive[error_col].mean():.2f}"
         )
 
         c3.metric(
@@ -1330,8 +2564,9 @@ elif page == "Model Accuracy":
 
         st.markdown("---")
 
-                # Postseason metrics
+        # Postseason metrics
         if not postseason_results_df.empty:
+            postseason_error_col = "spread_error" if "spread_error" in postseason_results_df.columns else "margin_error"
 
             st.markdown("## Postseason Performance")
 
@@ -1349,7 +2584,7 @@ elif page == "Model Accuracy":
 
             p2.metric(
                 "Postseason Spread Error",
-                f"{postseason_results_df['spread_error'].mean():.2f}"
+                f"{postseason_results_df[postseason_error_col].mean():.2f}"
             )
 
             p3.metric(
@@ -1367,7 +2602,7 @@ elif page == "Model Accuracy":
             fig, ax = plt.subplots(figsize=(6, 4))
 
             ax.hist(
-                df["spread_error"].dropna(),
+                df[error_col].dropna(),
                 bins=25
             )
 
@@ -1397,7 +2632,7 @@ elif page == "Model Accuracy":
 
         with st.expander("View Backtest Results"):
             st.dataframe(
-                df.sort_values("spread_error", ascending=False),
+                df.sort_values(error_col, ascending=False),
                 use_container_width=True,
                 hide_index=True,
             )
