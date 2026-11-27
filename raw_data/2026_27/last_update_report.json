@@ -1,10 +1,10 @@
 {
-  "run_utc": "2026-11-26T22:09:36.317937+00:00",
+  "run_utc": "2026-11-27T01:21:02.513713+00:00",
   "start": "2026-11-01",
-  "end": "2026-11-26",
-  "completed_games_found": 1122,
-  "games_in_season_file": 1265,
-  "new_boxscore_games": 1121,
-  "boxscore_rows_in_season_file": 2528,
+  "end": "2026-11-27",
+  "completed_games_found": 1127,
+  "games_in_season_file": 1270,
+  "new_boxscore_games": 1126,
+  "boxscore_rows_in_season_file": 2538,
   "errors": []
 }
